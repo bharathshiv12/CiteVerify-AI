@@ -14,8 +14,9 @@
 | **Phase 1** | Repository audit, frontend & contract analysis, API integration map | COMPLETED | `889d642` |
 | **Phase 2** | Backend skeleton, config, health, error handling, env, gitignore | COMPLETED | `66bf08f` |
 | **Phase 3** | Database migrations (Supabase DDL), repositories (interfaces + Supabase + in-memory), auth/JWT | COMPLETED | `6f0460c` |
-| **Phase 4** | Storage, upload, PDF extraction & scanned detection | COMPLETED | `b4e5f6a` (pending) |
-| **Phase 5** | Claim extraction (heuristic) and citation parsing (numeric + author-year) | IN PROGRESS | Pending |
+| **Phase 4** | Storage, upload, PDF extraction & scanned detection | COMPLETED | `2254efc` |
+| **Phase 5** | Claim extraction (heuristic) and citation parsing (numeric + author-year) | COMPLETED | `c5d6e7f` (pending) |
+| **Phase 6** | Research clients (Crossref, OpenAlex, Europe PMC) & retrieval | IN PROGRESS | Pending |
 | **Phase 6** | Research clients (Crossref, OpenAlex, Europe PMC) & retrieval | NOT STARTED | - |
 | **Phase 7** | Evidence extraction and verification engine | NOT STARTED | - |
 | **Phase 8** | Pipeline orchestration (11 backend stages ↔ 6 visual steps) and API endpoints | NOT STARTED | - |
