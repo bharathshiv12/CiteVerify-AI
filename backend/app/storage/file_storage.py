@@ -87,7 +87,7 @@ class SupabaseFileStorage(AbstractFileStorage):
 
     def _get_bucket(self):
         from supabase import create_client
-        key = settings.SUPABASE_SERVICE_ROLE_KEY or settings.SUPABASE_ANON_KEY
+        key = settings.effective_supabase_secret_key or settings.effective_supabase_anon_key
         client = create_client(settings.SUPABASE_URL, key)
         return client.storage.from_(self.bucket_name)
 

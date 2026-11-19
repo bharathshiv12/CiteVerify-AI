@@ -154,31 +154,21 @@ async def extract_document(
 
 @router.delete("/{document_id}", status_code=status.HTTP_204_NO_CONTENT, summary="Delete document and stored file")
 async def delete_document(
-    document_id: UUID,
+    doc: Document = Depends(verify_document_access),
     user: Optional[User] = Depends(get_optional_user),
     repo: AbstractRepository = Depends(get_repository),
 ):
     """
     Permanently deletes a document, its database cascade records, and its stored binary (Resolves Gap 2).
     """
-    doc = await repo.get_document(document_id)
-    if not doc:
-        raise NotFoundError(resource="Document", identifier=str(document_id))
-
-    # Verify ownership
-    if hasattr(repo, "document_owners"):
-        owner_id = repo.document_owners.get(doc.id)
-        if owner_id and (not user or user.id != owner_id):
-            raise NotFoundError(resource="Document", identifier=str(document_id))
-
     # Delete storage binary
     storage = get_file_storage()
     for user_prefix in [str(user.id) if user else None, "anonymous"]:
         if user_prefix:
-            await storage.delete_file(f"{user_prefix}/{document_id}.pdf")
+            await storage.delete_file(f"{user_prefix}/{doc.id}.pdf")
 
     # Delete repository cascade
-    await repo.delete_document(document_id)
+    await repo.delete_document(doc.id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
@@ -188,21 +178,17 @@ async def delete_document(
     response_model=DocumentAnalyzeResponse,
 )
 async def analyze_document(
-    document_id: UUID,
     background_tasks: BackgroundTasks,
+    doc: Document = Depends(verify_document_access),
     repo: AbstractRepository = Depends(get_repository),
 ):
     """
     Initiates asynchronous verification pipeline in background tasks.
     """
-    doc = await repo.get_document(document_id)
-    if not doc:
-        raise NotFoundError(resource="Document", identifier=str(document_id))
-
     if doc.status == ProcessingStatus.PROCESSING:
         raise ConflictError(message="Document is already actively being processed.")
 
-    background_tasks.add_task(run_pipeline, document_id, repo)
+    background_tasks.add_task(run_pipeline, doc.id, repo)
 
     return DocumentAnalyzeResponse(
         document_id=doc.id,
@@ -214,17 +200,13 @@ async def analyze_document(
 
 @router.get("/{document_id}/status", response_model=DocumentStatusResponse)
 async def get_document_status(
-    document_id: UUID,
+    doc: Document = Depends(verify_document_access),
     repo: AbstractRepository = Depends(get_repository),
 ):
     """
     Returns current status and pipeline progress.
     """
-    doc = await repo.get_document(document_id)
-    if not doc:
-        raise NotFoundError(resource="Document", identifier=str(document_id))
-
-    claims, total_claims = await repo.get_claims_by_document(document_id, page=1, page_size=1)
+    claims, total_claims = await repo.get_claims_by_document(doc.id, page=1, page_size=1)
     verified_count = sum(1 for c in claims if c.verdict is not None)
 
     # 11-stage progress percentage calculation
@@ -258,7 +240,7 @@ async def get_document_status(
 
 @router.get("/{document_id}/claims", response_model=ClaimListResponse)
 async def get_document_claims(
-    document_id: UUID,
+    doc: Document = Depends(verify_document_access),
     verdict: Optional[VerificationVerdict] = Query(None),
     needs_review: Optional[bool] = Query(None),
     page: int = Query(1, ge=1),
@@ -268,12 +250,8 @@ async def get_document_claims(
     """
     Returns paginated claims for a document with optional verdict and review filtering.
     """
-    doc = await repo.get_document(document_id)
-    if not doc:
-        raise NotFoundError(resource="Document", identifier=str(document_id))
-
     items, total = await repo.get_claims_by_document(
-        document_id=document_id,
+        document_id=doc.id,
         verdict=verdict,
         needs_review=needs_review,
         page=page,
@@ -289,29 +267,25 @@ async def get_document_claims(
 
 @router.get("/{document_id}/report", response_model=VerificationReport)
 async def get_document_report(
-    document_id: UUID,
+    doc: Document = Depends(verify_document_access),
     repo: AbstractRepository = Depends(get_repository),
 ):
     """
     Returns the final synthesized verification report.
     Returns 409 Conflict if analysis is not yet completed.
     """
-    doc = await repo.get_document(document_id)
-    if not doc:
-        raise NotFoundError(resource="Document", identifier=str(document_id))
-
     if doc.status != ProcessingStatus.COMPLETED:
         raise ConflictError(
             message=f"Document analysis is not completed yet (current status: {doc.status.value}).",
-            details={"document_id": str(document_id), "status": doc.status.value},
+            details={"document_id": str(doc.id), "status": doc.status.value},
         )
 
-    report = await repo.get_report_by_document(document_id)
+    report = await repo.get_report_by_document(doc.id)
     if report:
         return report
 
     # Synthesize fallback report from claims if report record not yet written
-    claims, total = await repo.get_claims_by_document(document_id, page=1, page_size=1000)
+    claims, total = await repo.get_claims_by_document(doc.id, page=1, page_size=1000)
     verdict_counts = {v.value: 0 for v in VerificationVerdict}
     verdict_counts["UNVERIFIED"] = 0
     for c in claims:
@@ -335,26 +309,22 @@ async def get_document_report(
 
 @router.get("/{document_id}/report/pdf", summary="Export verification report as PDF")
 async def export_document_report_pdf(
-    document_id: UUID,
+    doc: Document = Depends(verify_document_access),
     repo: AbstractRepository = Depends(get_repository),
 ):
     """
     Exports verification report as a publication-ready PDF document (Resolves Gap 7).
     """
-    doc = await repo.get_document(document_id)
-    if not doc:
-        raise NotFoundError(resource="Document", identifier=str(document_id))
-
     if doc.status != ProcessingStatus.COMPLETED:
         raise ConflictError(
             message=f"Document analysis is not completed yet (current status: {doc.status.value}).",
-            details={"document_id": str(document_id), "status": doc.status.value},
+            details={"document_id": str(doc.id), "status": doc.status.value},
         )
 
-    report = await repo.get_report_by_document(document_id)
+    report = await repo.get_report_by_document(doc.id)
     if not report:
         # Fallback generate from stored claims
-        claims, _ = await repo.get_claims_by_document(document_id, page=1, page_size=1000)
+        claims, _ = await repo.get_claims_by_document(doc.id, page=1, page_size=1000)
         from app.services.report_generator import generate_verification_report
         report = generate_verification_report(doc, claims)
 

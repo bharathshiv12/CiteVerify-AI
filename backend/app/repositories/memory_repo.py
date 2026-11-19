@@ -13,9 +13,10 @@ from app.schemas.citation import Citation
 from app.schemas.research_paper import ResearchPaper
 from app.schemas.evidence import Evidence
 from app.schemas.report import VerificationReport
-from app.schemas.enums import VerificationVerdict, ProcessingStatus
+from app.schemas.enums import VerificationVerdict, ProcessingStatus, PipelineStage
 from app.schemas.dashboard import DashboardStats, DashboardActivity
 from app.schemas.settings import UserSettings, UserSettingsUpdate
+from app.schemas.user import UserProfile
 
 
 class InMemoryRepository(AbstractRepository):
@@ -32,6 +33,8 @@ class InMemoryRepository(AbstractRepository):
         self.reviews: List[Dict] = []
         self.activities: List[DashboardActivity] = []
         self.user_settings_store: Dict[UUID, UserSettings] = {}
+        self.profiles: Dict[UUID, UserProfile] = {}
+        self.processing_jobs: Dict[UUID, Dict] = {}  # document_id -> job dict
 
     # Documents
     async def create_document(self, document: Document, user_id: Optional[UUID] = None) -> Document:
@@ -51,6 +54,9 @@ class InMemoryRepository(AbstractRepository):
 
     async def get_document(self, document_id: UUID) -> Optional[Document]:
         return self.documents.get(document_id)
+
+    async def get_document_owner(self, document_id: UUID) -> Optional[UUID]:
+        return self.document_owners.get(document_id)
 
     async def update_document(self, document: Document) -> Document:
         self.documents[document.id] = document
@@ -92,6 +98,9 @@ class InMemoryRepository(AbstractRepository):
 
         # Delete reviews
         self.reviews = [r for r in self.reviews if r.get("document_id") != document_id]
+
+        # Delete processing jobs
+        self.processing_jobs.pop(document_id, None)
         return True
 
     async def list_documents(self, user_id: Optional[UUID] = None, page: int = 1, page_size: int = 20) -> Tuple[List[Document], int]:
@@ -109,6 +118,10 @@ class InMemoryRepository(AbstractRepository):
     async def save_claims(self, claims: List[Claim]) -> List[Claim]:
         for c in claims:
             self.claims[c.id] = c
+            if c.evidence:
+                await self.save_evidence(c.evidence, claim_id=c.id)
+            if c.citations:
+                await self.save_citations(c.citations)
         return claims
 
     async def get_claims_by_document(
@@ -194,7 +207,8 @@ class InMemoryRepository(AbstractRepository):
             if claim_id:
                 if claim_id not in self.claim_evidence:
                     self.claim_evidence[claim_id] = []
-                self.claim_evidence[claim_id].append(ev.id)
+                if ev.id not in self.claim_evidence[claim_id]:
+                    self.claim_evidence[claim_id].append(ev.id)
         return evidence
 
     async def get_evidence_by_claim(self, claim_id: UUID) -> List[Evidence]:
@@ -262,6 +276,69 @@ class InMemoryRepository(AbstractRepository):
             all_reports = [r for r in all_reports if self.document_owners.get(r.document_id) == user_id]
         return all_reports
 
+    # Processing Jobs
+    async def create_processing_job(
+        self,
+        document_id: UUID,
+        status: ProcessingStatus = ProcessingStatus.PENDING,
+        current_stage: PipelineStage = PipelineStage.UPLOADED,
+        progress_percent: int = 0,
+    ) -> Dict:
+        now = datetime.now(timezone.utc).isoformat()
+        job = {
+            "id": str(uuid4()),
+            "document_id": str(document_id),
+            "status": status.value,
+            "current_stage": current_stage.value,
+            "progress_percent": progress_percent,
+            "error_message": None,
+            "started_at": now if status == ProcessingStatus.PROCESSING else None,
+            "completed_at": now if status == ProcessingStatus.COMPLETED else None,
+            "created_at": now,
+            "updated_at": now,
+        }
+        self.processing_jobs[document_id] = job
+        return job
+
+    async def update_processing_job(
+        self,
+        document_id: UUID,
+        status: ProcessingStatus,
+        current_stage: PipelineStage,
+        progress_percent: int,
+        error_message: Optional[str] = None,
+    ) -> Dict:
+        job = self.processing_jobs.get(document_id)
+        now = datetime.now(timezone.utc).isoformat()
+        if not job:
+            job = {
+                "id": str(uuid4()),
+                "document_id": str(document_id),
+                "created_at": now,
+            }
+        job["status"] = status.value
+        job["current_stage"] = current_stage.value
+        job["progress_percent"] = progress_percent
+        job["error_message"] = error_message
+        job["updated_at"] = now
+        if status == ProcessingStatus.PROCESSING and not job.get("started_at"):
+            job["started_at"] = now
+        elif status in (ProcessingStatus.COMPLETED, ProcessingStatus.FAILED):
+            job["completed_at"] = now
+        self.processing_jobs[document_id] = job
+        return job
+
+    async def get_processing_job_by_document(self, document_id: UUID) -> Optional[Dict]:
+        return self.processing_jobs.get(document_id)
+
+    # User Profiles
+    async def get_user_profile(self, user_id: UUID) -> Optional[UserProfile]:
+        return self.profiles.get(user_id)
+
+    async def update_user_profile(self, user_id: UUID, profile: UserProfile) -> UserProfile:
+        self.profiles[user_id] = profile
+        return profile
+
     # Dashboard & Settings
     async def get_dashboard_stats(self, user_id: Optional[UUID] = None) -> DashboardStats:
         docs = list(self.documents.values())
@@ -281,7 +358,6 @@ class InMemoryRepository(AbstractRepository):
         outdated = sum(1 for c in relevant_claims if c.verdict == VerificationVerdict.POTENTIALLY_OUTDATED)
         needs_review = sum(1 for c in relevant_claims if c.needs_human_review)
 
-        # Average reliability score
         relevant_reports = [r for r in self.reports.values() if r.document_id in doc_ids]
         avg_score = (
             sum(r.reliability_score for r in relevant_reports) / len(relevant_reports)

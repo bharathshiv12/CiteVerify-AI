@@ -12,6 +12,7 @@ export function PasswordInput({
   label = "Password",
   value,
   showStrengthChecklist = false,
+  disabled = false,
   ...props
 }: PasswordInputProps) {
   const [showPassword, setShowPassword] = useState(false);
@@ -30,12 +31,14 @@ export function PasswordInput({
         label={label}
         type={showPassword ? "text" : "password"}
         value={value}
+        disabled={disabled}
         leftIcon={<Lock className="w-4 h-4" />}
         rightIcon={
           <button
             type="button"
+            disabled={disabled}
             onClick={() => setShowPassword(!showPassword)}
-            className="p-1 text-[#7A685D] hover:text-[#3E2F27] dark:hover:text-[#F3E9DD] focus:outline-none"
+            className="p-1 text-[#7A685D] hover:text-[#3E2F27] dark:hover:text-[#F3E9DD] disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none"
             aria-label={showPassword ? "Hide password" : "Show password"}
           >
             {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}

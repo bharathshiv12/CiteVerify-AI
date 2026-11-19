@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import Link from "next/link";
 import { AppShell } from "../../../components/layout/app-shell";
 import { useDocumentReport, useDocumentStatus } from "../../../hooks/use-document";
+import { downloadReportPdf } from "../../../services/api";
 import { VerdictBadge, EvidenceLevelBadge, RetrievalBadge } from "../../../components/ui/status-badge";
 import { ConfidenceIndicator } from "../../../components/verification/confidence-indicator";
 import { Button } from "../../../components/ui/button";
@@ -48,6 +49,26 @@ export default function DocumentReportPage() {
   // Browser Print / Save as PDF handler
   const handlePrint = () => {
     window.print();
+  };
+
+  const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
+  const handleDownloadPdf = async () => {
+    try {
+      setIsDownloadingPdf(true);
+      const blob = await downloadReportPdf(documentId);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `citeverify_report_${report?.document_id.slice(0, 8) || "export"}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      console.error("PDF download failed", e);
+    } finally {
+      setIsDownloadingPdf(false);
+    }
   };
 
   if (isLoading) {
@@ -130,14 +151,14 @@ export default function DocumentReportPage() {
             <ArrowLeft className="w-3.5 h-3.5" /> Back to Reports List
           </Link>
 
-          <div className="flex items-center gap-2.5">
+          <div className="flex flex-wrap items-center gap-2.5">
             <Button
               variant="outline"
               size="compact"
               onClick={handlePrint}
               leftIcon={<Printer className="w-3.5 h-3.5" />}
             >
-              Print / Save as PDF
+              Print / Save
             </Button>
             <Button
               variant="secondary"
@@ -145,7 +166,16 @@ export default function DocumentReportPage() {
               onClick={handleDownloadJSON}
               leftIcon={<Download className="w-3.5 h-3.5" />}
             >
-              Download JSON
+              JSON
+            </Button>
+            <Button
+              variant="primary"
+              size="compact"
+              onClick={handleDownloadPdf}
+              isLoading={isDownloadingPdf}
+              leftIcon={<FileText className="w-3.5 h-3.5" />}
+            >
+              Download PDF Report
             </Button>
           </div>
         </div>

@@ -10,10 +10,11 @@ import { ConfirmDialog } from "../../components/ui/confirm-dialog";
 import { useAuth } from "../../lib/supabase/auth-context";
 import {
   getRegisteredDocuments,
+  registerDocument,
   unregisterDocument,
   RegisteredDocument,
 } from "../../lib/document-registry";
-import { getDocumentReport, getDocumentStatus, USE_MOCKS } from "../../services/api";
+import { getDocumentReport, getDocumentStatus, listDocuments, deleteDocument, USE_MOCKS } from "../../services/api";
 import { VerificationReport, DocumentStatusResponse } from "../../types";
 import {
   History,
@@ -37,37 +38,69 @@ export default function HistoryPage() {
   const [documentToDelete, setDocumentToDelete] = useState<RegisteredDocument | null>(null);
 
   useEffect(() => {
-    const docs = getRegisteredDocuments(user?.id);
-    setDocuments(docs);
+    async function loadDocs() {
+      let localDocs = getRegisteredDocuments(user?.id);
 
-    if (docs.length === 0 && USE_MOCKS) {
-      const mockDoc: RegisteredDocument = {
-        document_id: "00000000-0000-0000-0000-000000000001",
-        filename: "synthetic_sample_paper_v1.pdf",
-        uploaded_at: new Date().toISOString(),
-      };
-      setDocuments([mockDoc]);
-      getDocumentReport(mockDoc.document_id).then((rep) => {
-        setReportsMap({ [mockDoc.document_id]: rep });
+      if (user && !USE_MOCKS) {
+        try {
+          const remote = await listDocuments(1, 100);
+          if (remote?.items?.length) {
+            remote.items.forEach((rd) => {
+              registerDocument(
+                {
+                  document_id: rd.id,
+                  filename: rd.filename,
+                  uploaded_at: rd.created_at,
+                  file_size_bytes: rd.file_size_bytes,
+                  status: rd.status,
+                  pipeline_stage: rd.pipeline_stage,
+                },
+                user.id
+              );
+            });
+            localDocs = getRegisteredDocuments(user.id);
+          }
+        } catch {}
+      }
+
+      setDocuments(localDocs);
+
+      if (localDocs.length === 0 && USE_MOCKS) {
+        const mockDoc: RegisteredDocument = {
+          document_id: "00000000-0000-0000-0000-000000000001",
+          filename: "synthetic_sample_paper_v1.pdf",
+          uploaded_at: new Date().toISOString(),
+        };
+        setDocuments([mockDoc]);
+        getDocumentReport(mockDoc.document_id).then((rep) => {
+          setReportsMap({ [mockDoc.document_id]: rep });
+        });
+        return;
+      }
+
+      localDocs.forEach(async (d) => {
+        try {
+          const status = await getDocumentStatus(d.document_id);
+          setStatusMap((prev) => ({ ...prev, [d.document_id]: status }));
+        } catch {}
+
+        try {
+          const report = await getDocumentReport(d.document_id);
+          setReportsMap((prev) => ({ ...prev, [d.document_id]: report }));
+        } catch {}
       });
-      return;
     }
 
-    docs.forEach(async (d) => {
-      try {
-        const status = await getDocumentStatus(d.document_id);
-        setStatusMap((prev) => ({ ...prev, [d.document_id]: status }));
-      } catch {}
-
-      try {
-        const report = await getDocumentReport(d.document_id);
-        setReportsMap((prev) => ({ ...prev, [d.document_id]: report }));
-      } catch {}
-    });
+    loadDocs();
   }, [user]);
 
-  const handleConfirmRemove = () => {
+  const handleConfirmRemove = async () => {
     if (!documentToDelete) return;
+    try {
+      await deleteDocument(documentToDelete.document_id);
+    } catch (err) {
+      console.warn("Backend delete error:", err);
+    }
     const updated = unregisterDocument(documentToDelete.document_id, user?.id);
     setDocuments(updated);
     setDocumentToDelete(null);

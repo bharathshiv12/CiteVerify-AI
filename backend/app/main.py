@@ -1,6 +1,7 @@
 """
 Main FastAPI application entry point for CiteVerify AI backend.
 """
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.exceptions import RequestValidationError
@@ -26,6 +27,24 @@ from app.api.routes import (
 )
 
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup validation without exposing secrets
+    backend = getattr(settings, "REPOSITORY_BACKEND", "memory").lower()
+    if settings.ENVIRONMENT == "production":
+        if backend != "supabase":
+            raise RuntimeError(
+                "CRITICAL: In-memory persistence is strictly forbidden in production. "
+                "Set REPOSITORY_BACKEND=supabase in environment variables."
+            )
+        if not settings.is_supabase_configured:
+            raise RuntimeError(
+                "CRITICAL: Supabase credentials are missing while REPOSITORY_BACKEND=supabase in production. "
+                "Set SUPABASE_URL and SUPABASE_SECRET_KEY."
+            )
+    yield
+
+
 def create_app() -> FastAPI:
     app = FastAPI(
         title="CiteVerify AI Backend",
@@ -34,6 +53,7 @@ def create_app() -> FastAPI:
         openapi_url="/api/openapi.json",
         docs_url="/api/docs",
         redoc_url="/api/redoc",
+        lifespan=lifespan,
     )
 
     # 1. Request ID and Access Logging Middleware

@@ -33,11 +33,16 @@ class Settings(BaseSettings):
     LOCAL_STORAGE_DIR: str = "backend/storage_data"
     SUPABASE_STORAGE_BUCKET: str = "sapthack-documents"
 
+    # Repository Backend: memory | supabase
+    REPOSITORY_BACKEND: str = "memory"
+
     # Database / Supabase settings
     DATABASE_URL: str = ""
     SUPABASE_URL: str = ""
     SUPABASE_ANON_KEY: str = ""
+    SUPABASE_PUBLISHABLE_KEY: str = ""
     SUPABASE_SERVICE_ROLE_KEY: str = ""
+    SUPABASE_SECRET_KEY: str = ""
     SUPABASE_JWT_SECRET: str = ""
 
     # Research APIs & Polite Pool
@@ -74,8 +79,16 @@ class Settings(BaseSettings):
         return origins if origins else ["http://localhost:3000"]
 
     @property
+    def effective_supabase_secret_key(self) -> str:
+        return self.SUPABASE_SECRET_KEY or self.SUPABASE_SERVICE_ROLE_KEY
+
+    @property
+    def effective_supabase_anon_key(self) -> str:
+        return self.SUPABASE_PUBLISHABLE_KEY or self.SUPABASE_ANON_KEY
+
+    @property
     def is_supabase_configured(self) -> bool:
-        return bool(self.SUPABASE_URL and (self.SUPABASE_ANON_KEY or self.SUPABASE_SERVICE_ROLE_KEY))
+        return bool(self.SUPABASE_URL and (self.effective_supabase_anon_key or self.effective_supabase_secret_key))
 
     @property
     def is_ai_configured(self) -> bool:

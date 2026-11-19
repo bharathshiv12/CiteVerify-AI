@@ -158,12 +158,13 @@ async def verify_jwt_token(token: str) -> User:
             logger.debug(f"JWKS verification failed: {e}")
 
     # 4. Supabase Remote Fallback: validate token via Supabase Auth API
-    if settings.SUPABASE_URL and settings.SUPABASE_ANON_KEY:
+    anon_key = settings.effective_supabase_anon_key or settings.effective_supabase_secret_key
+    if settings.SUPABASE_URL and anon_key:
         try:
             auth_url = f"{settings.SUPABASE_URL.rstrip('/')}/auth/v1/user"
             headers = {
                 "Authorization": f"Bearer {token}",
-                "apikey": settings.SUPABASE_ANON_KEY,
+                "apikey": anon_key,
             }
             async with httpx.AsyncClient(timeout=5.0) as client:
                 res = await client.get(auth_url, headers=headers)

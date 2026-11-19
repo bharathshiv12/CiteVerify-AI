@@ -11,9 +11,10 @@ from app.schemas.citation import Citation
 from app.schemas.research_paper import ResearchPaper
 from app.schemas.evidence import Evidence
 from app.schemas.report import VerificationReport
-from app.schemas.enums import VerificationVerdict
+from app.schemas.enums import VerificationVerdict, ProcessingStatus, PipelineStage
 from app.schemas.dashboard import DashboardStats, DashboardActivity
 from app.schemas.settings import UserSettings, UserSettingsUpdate
+from app.schemas.user import UserProfile
 
 
 class AbstractRepository(ABC):
@@ -24,6 +25,10 @@ class AbstractRepository(ABC):
 
     @abstractmethod
     async def get_document(self, document_id: UUID) -> Optional[Document]:
+        pass
+
+    @abstractmethod
+    async def get_document_owner(self, document_id: UUID) -> Optional[UUID]:
         pass
 
     @abstractmethod
@@ -132,6 +137,41 @@ class AbstractRepository(ABC):
 
     @abstractmethod
     async def list_reports(self, user_id: Optional[UUID] = None) -> List[VerificationReport]:
+        pass
+
+    # Processing Jobs
+    @abstractmethod
+    async def create_processing_job(
+        self,
+        document_id: UUID,
+        status: ProcessingStatus = ProcessingStatus.PENDING,
+        current_stage: PipelineStage = PipelineStage.UPLOADED,
+        progress_percent: int = 0,
+    ) -> Dict:
+        pass
+
+    @abstractmethod
+    async def update_processing_job(
+        self,
+        document_id: UUID,
+        status: ProcessingStatus,
+        current_stage: PipelineStage,
+        progress_percent: int,
+        error_message: Optional[str] = None,
+    ) -> Dict:
+        pass
+
+    @abstractmethod
+    async def get_processing_job_by_document(self, document_id: UUID) -> Optional[Dict]:
+        pass
+
+    # User Profiles
+    @abstractmethod
+    async def get_user_profile(self, user_id: UUID) -> Optional[UserProfile]:
+        pass
+
+    @abstractmethod
+    async def update_user_profile(self, user_id: UUID, profile: UserProfile) -> UserProfile:
         pass
 
     # Dashboard & Settings

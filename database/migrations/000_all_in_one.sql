@@ -295,85 +295,111 @@ ALTER TABLE public.user_settings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.activity_log ENABLE ROW LEVEL SECURITY;
 
 -- Profiles
+DROP POLICY IF EXISTS "Users can read own profile" ON public.profiles;
 CREATE POLICY "Users can read own profile" ON public.profiles FOR SELECT USING (auth.uid() = id);
+DROP POLICY IF EXISTS "Users can update own profile" ON public.profiles;
 CREATE POLICY "Users can update own profile" ON public.profiles FOR UPDATE USING (auth.uid() = id);
 
 -- Documents
+DROP POLICY IF EXISTS "Users can select own documents" ON public.documents;
 CREATE POLICY "Users can select own documents" ON public.documents FOR SELECT USING (auth.uid() = user_id);
+DROP POLICY IF EXISTS "Users can insert own documents" ON public.documents;
 CREATE POLICY "Users can insert own documents" ON public.documents FOR INSERT WITH CHECK (auth.uid() = user_id);
+DROP POLICY IF EXISTS "Users can update own documents" ON public.documents;
 CREATE POLICY "Users can update own documents" ON public.documents FOR UPDATE USING (auth.uid() = user_id);
+DROP POLICY IF EXISTS "Users can delete own documents" ON public.documents;
 CREATE POLICY "Users can delete own documents" ON public.documents FOR DELETE USING (auth.uid() = user_id);
 
 -- Research Papers (Shared reference cache)
+DROP POLICY IF EXISTS "Authenticated users can read research papers" ON public.research_papers;
 CREATE POLICY "Authenticated users can read research papers" ON public.research_papers FOR SELECT TO authenticated USING (true);
 
 -- Citations
+DROP POLICY IF EXISTS "Users can read citations of own documents" ON public.citations;
 CREATE POLICY "Users can read citations of own documents" ON public.citations FOR SELECT USING (EXISTS (
     SELECT 1 FROM public.documents d WHERE d.id = citations.document_id AND d.user_id = auth.uid()
 ));
+DROP POLICY IF EXISTS "Users can insert citations to own documents" ON public.citations;
 CREATE POLICY "Users can insert citations to own documents" ON public.citations FOR INSERT WITH CHECK (EXISTS (
     SELECT 1 FROM public.documents d WHERE d.id = citations.document_id AND d.user_id = auth.uid()
 ));
+DROP POLICY IF EXISTS "Users can delete citations of own documents" ON public.citations;
 CREATE POLICY "Users can delete citations of own documents" ON public.citations FOR DELETE USING (EXISTS (
     SELECT 1 FROM public.documents d WHERE d.id = citations.document_id AND d.user_id = auth.uid()
 ));
 
 -- Claims
+DROP POLICY IF EXISTS "Users can read claims of own documents" ON public.claims;
 CREATE POLICY "Users can read claims of own documents" ON public.claims FOR SELECT USING (EXISTS (
     SELECT 1 FROM public.documents d WHERE d.id = claims.document_id AND d.user_id = auth.uid()
 ));
+DROP POLICY IF EXISTS "Users can insert claims to own documents" ON public.claims;
 CREATE POLICY "Users can insert claims to own documents" ON public.claims FOR INSERT WITH CHECK (EXISTS (
     SELECT 1 FROM public.documents d WHERE d.id = claims.document_id AND d.user_id = auth.uid()
 ));
+DROP POLICY IF EXISTS "Users can update claims of own documents" ON public.claims;
 CREATE POLICY "Users can update claims of own documents" ON public.claims FOR UPDATE USING (EXISTS (
     SELECT 1 FROM public.documents d WHERE d.id = claims.document_id AND d.user_id = auth.uid()
 ));
+DROP POLICY IF EXISTS "Users can delete claims of own documents" ON public.claims;
 CREATE POLICY "Users can delete claims of own documents" ON public.claims FOR DELETE USING (EXISTS (
     SELECT 1 FROM public.documents d WHERE d.id = claims.document_id AND d.user_id = auth.uid()
 ));
 
 -- Claim Citations
+DROP POLICY IF EXISTS "Users can read claim citations of own documents" ON public.claim_citations;
 CREATE POLICY "Users can read claim citations of own documents" ON public.claim_citations FOR SELECT USING (EXISTS (
     SELECT 1 FROM public.claims c JOIN public.documents d ON d.id = c.document_id WHERE c.id = claim_citations.claim_id AND d.user_id = auth.uid()
 ));
 
 -- Evidence
+DROP POLICY IF EXISTS "Users can read evidence of own claims" ON public.evidence;
 CREATE POLICY "Users can read evidence of own claims" ON public.evidence FOR SELECT USING (EXISTS (
     SELECT 1 FROM public.claims c JOIN public.documents d ON d.id = c.document_id WHERE c.id = evidence.claim_id AND d.user_id = auth.uid()
 ));
 
 -- Verifications
+DROP POLICY IF EXISTS "Users can read verifications of own claims" ON public.verifications;
 CREATE POLICY "Users can read verifications of own claims" ON public.verifications FOR SELECT USING (EXISTS (
     SELECT 1 FROM public.claims c JOIN public.documents d ON d.id = c.document_id WHERE c.id = verifications.claim_id AND d.user_id = auth.uid()
 ));
 
 -- Human Reviews
+DROP POLICY IF EXISTS "Users can read human reviews of own claims" ON public.human_reviews;
 CREATE POLICY "Users can read human reviews of own claims" ON public.human_reviews FOR SELECT USING (EXISTS (
     SELECT 1 FROM public.claims c JOIN public.documents d ON d.id = c.document_id WHERE c.id = human_reviews.claim_id AND d.user_id = auth.uid()
 ));
+DROP POLICY IF EXISTS "Users can insert human reviews for own claims" ON public.human_reviews;
 CREATE POLICY "Users can insert human reviews for own claims" ON public.human_reviews FOR INSERT WITH CHECK (EXISTS (
     SELECT 1 FROM public.claims c JOIN public.documents d ON d.id = c.document_id WHERE c.id = human_reviews.claim_id AND d.user_id = auth.uid()
 ));
 
 -- Reports
+DROP POLICY IF EXISTS "Users can read reports of own documents" ON public.reports;
 CREATE POLICY "Users can read reports of own documents" ON public.reports FOR SELECT USING (EXISTS (
     SELECT 1 FROM public.documents d WHERE d.id = reports.document_id AND d.user_id = auth.uid()
 ));
+DROP POLICY IF EXISTS "Users can insert reports for own documents" ON public.reports;
 CREATE POLICY "Users can insert reports for own documents" ON public.reports FOR INSERT WITH CHECK (EXISTS (
     SELECT 1 FROM public.documents d WHERE d.id = reports.document_id AND d.user_id = auth.uid()
 ));
 
 -- Processing Jobs
+DROP POLICY IF EXISTS "Users can read processing jobs of own documents" ON public.processing_jobs;
 CREATE POLICY "Users can read processing jobs of own documents" ON public.processing_jobs FOR SELECT USING (EXISTS (
     SELECT 1 FROM public.documents d WHERE d.id = processing_jobs.document_id AND d.user_id = auth.uid()
 ));
 
 -- User Settings
+DROP POLICY IF EXISTS "Users can read own settings" ON public.user_settings;
 CREATE POLICY "Users can read own settings" ON public.user_settings FOR SELECT USING (auth.uid() = user_id);
+DROP POLICY IF EXISTS "Users can update own settings" ON public.user_settings;
 CREATE POLICY "Users can update own settings" ON public.user_settings FOR UPDATE USING (auth.uid() = user_id);
+DROP POLICY IF EXISTS "Users can insert own settings" ON public.user_settings;
 CREATE POLICY "Users can insert own settings" ON public.user_settings FOR INSERT WITH CHECK (auth.uid() = user_id);
 
 -- Activity Log
+DROP POLICY IF EXISTS "Users can read own activity log" ON public.activity_log;
 CREATE POLICY "Users can read own activity log" ON public.activity_log FOR SELECT USING (auth.uid() = user_id);
 
 -- Storage bucket 'sapthack-documents'
@@ -381,12 +407,15 @@ INSERT INTO storage.buckets (id, name, public)
 VALUES ('sapthack-documents', 'sapthack-documents', false)
 ON CONFLICT (id) DO NOTHING;
 
+DROP POLICY IF EXISTS "Users can upload document to own folder" ON storage.objects;
 CREATE POLICY "Users can upload document to own folder" ON storage.objects FOR INSERT TO authenticated
 WITH CHECK (bucket_id = 'sapthack-documents' AND (storage.foldername(name))[1] = auth.uid()::text);
 
+DROP POLICY IF EXISTS "Users can read documents from own folder" ON storage.objects;
 CREATE POLICY "Users can read documents from own folder" ON storage.objects FOR SELECT TO authenticated
 USING (bucket_id = 'sapthack-documents' AND (storage.foldername(name))[1] = auth.uid()::text);
 
+DROP POLICY IF EXISTS "Users can delete documents from own folder" ON storage.objects;
 CREATE POLICY "Users can delete documents from own folder" ON storage.objects FOR DELETE TO authenticated
 USING (bucket_id = 'sapthack-documents' AND (storage.foldername(name))[1] = auth.uid()::text);
 

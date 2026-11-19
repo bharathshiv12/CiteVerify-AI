@@ -192,7 +192,7 @@ backend/.venv/Scripts/pytest backend/tests -v
 
 ---
 
-## 10. Current Foundation Status Checklist
+## 10. Completed Implementation Status Checklist
 
 - [x] Environment audit and tool inspection completed (`docs/ENVIRONMENT.md`).
 - [x] Monorepo directory structure established with `__init__.py` files.
@@ -201,15 +201,61 @@ backend/.venv/Scripts/pytest backend/tests -v
 - [x] Pydantic v2 schemas and TypeScript interfaces synchronized with zero drift.
 - [x] Synthetic mock fixtures created in `contracts/examples/` with `_synthetic: true`.
 - [x] Backend FastAPI application running with CORS, request-ID tracing, and error envelope handlers.
-- [x] In-memory repository interface implemented for zero-credential local development.
-- [x] File upload validator enforcing %PDF- magic bytes, MIME, and size limits.
-- [x] Backend service stubs documented with ownership, signatures, inputs, and outputs.
-- [x] Backend pytest test suite (13/13 passing) including contract drift and upload tests.
-- [x] Live `GET /api/health` probe verified returning `200 OK`.
-- [x] Frontend Next.js 14 App Router, TypeScript, and Tailwind CSS configured and building (`npm run build` passing).
-- [x] Agent specifications, rules, workflows, issue templates, and CI configuration committed.
-- [ ] Multi-page PDF text extraction (Scheduled: Hours 2–6).
-- [ ] Claim extraction few-shot prompt (Scheduled: Hours 2–6).
-- [ ] Crossref & OpenAlex API integration (Scheduled: Hours 6–10).
-- [ ] LLM verification reasoning & report generation (Scheduled: Hours 10–15).
+- [x] Persistent Supabase PostgreSQL repository interface implemented (`REPOSITORY_BACKEND=supabase`) with 13 tables, RLS, and cascading foreign keys.
+- [x] Private Supabase Storage bucket (`sapthack-documents`) integration for academic PDFs.
+- [x] Supabase Authentication with JWT validation (JWKS + remote verification) and cross-user IDOR isolation.
+- [x] File upload validator enforcing `%PDF-` magic bytes, MIME, and size limits.
+- [x] Multi-page PDF text extraction (PyMuPDF / fitz) with scanned image detection.
+- [x] Empirical claim extraction isolating factual scientific assertions.
+- [x] In-text citation parsing (numeric `[1]` and author-year `Smith et al., 2020`).
+- [x] Full bibliography reference parsing and citation-to-reference matching.
+- [x] Real-time scholarly API retrieval (Crossref, OpenAlex, and Europe PMC polite pools).
+- [x] Candidate evidence passage extraction and TF-IDF semantic relevance ranking.
+- [x] Verification engine with 5 canonical verdicts, confidence scoring, and human review flags.
+- [x] Interactive human review workflow with audit logging.
+- [x] Publication-ready PDF report generation (ReportLab) with direct download stream.
+- [x] Comprehensive test suites: 82/82 backend pytest tests, 41/41 API tests, 24/24 frontend unit tests, and 24/24 master demo tests passing.
+
+---
+
+## 11. Hackathon Live Demo Instructions
+
+To demonstrate CiteVerify locally:
+
+1. **Start Services:**
+   ```bash
+   # Terminal 1: Backend
+   python -m uvicorn app.main:app --app-dir backend --host 127.0.0.1 --port 8000 --reload
+
+   # Terminal 2: Frontend
+   cd frontend && npm run dev
+   ```
+
+2. **Open the Application:**
+   Navigate to [http://localhost:3000](http://localhost:3000) in your browser.
+
+3. **Sign In:**
+   - Log in with your academic credentials (e.g., `bharath.citeverify.test@gmail.com`).
+   - If not registered, click "Create Academic Account" on the signup page.
+
+4. **Upload a Paper:**
+   - Go to `/verify` ("Verify Document" in the sidebar).
+   - Drag and drop a scientific PDF (or use `tests/fixtures/pdf_a_simple.pdf`).
+   - Click **Start Verification Pipeline**.
+
+5. **Track Verification Pipeline:**
+   - Watch the 6 visual stages progress in real time:
+     1. Document Intake
+     2. Text & Claim Extraction
+     3. Citation Graph Mapping
+     4. Research Retrieval (Crossref / OpenAlex / Europe PMC)
+     5. Evidence Comparison Workspace
+     6. Verification Verdicts & Audit
+   - Inspect extracted claims and their evidence passages.
+   - Click "Submit Human Review" on any claim to update its verdict and add reviewer notes.
+
+6. **View & Export Final Report:**
+   - View the synthesized reliability score and breakdown at `/reports/[documentId]`.
+   - Click **Download PDF Report** to export the publication-ready verification PDF.
+   - Click **JSON** to download the machine-readable verification envelope.
 

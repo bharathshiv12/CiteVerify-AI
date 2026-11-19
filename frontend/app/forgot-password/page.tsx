@@ -12,25 +12,54 @@ import { MailCheck, ArrowLeft } from "lucide-react";
 export default function ForgotPasswordPage() {
   const { isConfigured } = useAuth();
   const [email, setEmail] = useState("");
+  const [error, setError] = useState<string | null>(null);
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
+  // Field validation checks for button enabling
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  const isFormValid = emailRegex.test(email.trim());
+  const isSubmitDisabled = !isConfigured || isLoading || !isFormValid;
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError(null);
+
     if (!isConfigured) {
-      setIsSubmitted(true);
+      setError(
+        "Authentication service is currently unavailable. Supabase environment credentials are not configured."
+      );
+      return;
+    }
+
+    if (!email.trim()) {
+      setError("Please provide your registered academic email address.");
+      return;
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email.trim())) {
+      setError("Please enter a valid academic email address (e.g. researcher@university.edu).");
       return;
     }
 
     const supabase = getSupabaseClient();
-    if (supabase) {
-      setIsLoading(true);
-      await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/reset-password`,
-      });
-      setIsLoading(false);
+    if (!supabase) {
+      setError("Authentication service is unavailable.");
+      return;
     }
-    setIsSubmitted(true);
+
+    setIsLoading(true);
+    const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/reset-password`,
+    });
+    setIsLoading(false);
+
+    if (resetError) {
+      setError(resetError.message);
+    } else {
+      setIsSubmitted(true);
+    }
   };
 
   return (
@@ -66,24 +95,44 @@ export default function ForgotPasswordPage() {
             </div>
           ) : (
             <form onSubmit={handleSubmit} className="space-y-4">
+              {error && (
+                <div className="p-3 rounded-[10px] bg-[#F6E1E1] text-[#8F2E2E] dark:bg-[#B94D4D]/20 dark:text-[#fca5a5] text-xs font-medium">
+                  {error}
+                </div>
+              )}
+
               <Input
                 label="Registered Email"
                 type="email"
                 required
+                autoComplete="email"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                onChange={(e) => {
+                  setEmail(e.target.value);
+                  if (error) setError(null);
+                }}
                 placeholder="researcher@university.edu"
+                disabled={isLoading}
               />
 
-              <Button
-                type="submit"
-                variant="primary"
-                size="standard"
-                className="w-full"
-                isLoading={isLoading}
-              >
-                Send Reset Link
-              </Button>
+              <div>
+                <Button
+                  type="submit"
+                  variant="primary"
+                  size="standard"
+                  className="w-full"
+                  isLoading={isLoading}
+                  disabled={isSubmitDisabled}
+                >
+                  Send Reset Link
+                </Button>
+
+                {!isConfigured && (
+                  <p className="text-center text-[11px] text-[#A08B78] dark:text-[#8C7A6A] pt-2">
+                    Supabase authentication pending configuration in <code className="font-mono text-[10px]">.env.local</code> (submission disabled)
+                  </p>
+                )}
+              </div>
 
               <div className="text-center pt-2">
                 <Link

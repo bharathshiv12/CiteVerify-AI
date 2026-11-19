@@ -65,19 +65,46 @@ async def verify_document_access(
 ) -> Document:
     """
     Retrieves document and checks ownership.
-    Returns 404 (not 403) for non-owned documents to prevent leaking resource existence.
+    - If document has an owner and user is not authenticated: returns 401 Unauthorized.
+    - If document has an owner and caller is not the owner: returns 404 (non-disclosing).
     """
     doc = await repo.get_document(document_id)
     if not doc:
         raise NotFoundError(resource="Document", identifier=str(document_id))
 
     # If document has an owner, ensure caller is the owner
-    if hasattr(repo, "document_owners"):
-        owner_id = repo.document_owners.get(doc.id)
-        if owner_id and (not user or user.id != owner_id):
+    owner_id = await repo.get_document_owner(doc.id)
+    if owner_id:
+        if not user:
+            raise UnauthorizedError("Authentication required to access this document.")
+        if user.id != owner_id:
             raise NotFoundError(resource="Document", identifier=str(document_id))
 
     return doc
+
+
+async def verify_claim_access(
+    claim_id: UUID,
+    user: Optional[User] = Depends(get_optional_user),
+    repo: AbstractRepository = Depends(get_repository),
+):
+    """
+    Retrieves claim and checks owning document ownership.
+    - If document has an owner and user is not authenticated: returns 401 Unauthorized.
+    - If document has an owner and caller is not the owner: returns 404 (non-disclosing).
+    """
+    claim = await repo.get_claim(claim_id)
+    if not claim:
+        raise NotFoundError(resource="Claim", identifier=str(claim_id))
+
+    owner_id = await repo.get_document_owner(claim.document_id)
+    if owner_id:
+        if not user:
+            raise UnauthorizedError("Authentication required to access this claim.")
+        if user.id != owner_id:
+            raise NotFoundError(resource="Claim", identifier=str(claim_id))
+
+    return claim
 
 
 def rate_limit(bucket: str, max_requests: int, window_seconds: int = 60):

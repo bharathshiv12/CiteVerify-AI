@@ -2,8 +2,9 @@
 Authentication endpoints.
 Complements client-side Supabase Auth by providing token validation and profile lookup.
 """
+import re
 from fastapi import APIRouter, Depends, status
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 from app.core.config import settings
 from app.core.dependencies import get_current_user
@@ -26,6 +27,13 @@ class RegisterRequest(BaseModel):
 
 class PasswordResetRequest(BaseModel):
     email: str
+
+    @field_validator("email")
+    @classmethod
+    def validate_email_format(cls, v: str) -> str:
+        if not re.match(r"^[^\s@]+@[^\s@]+\.[^\s@]+$", v):
+            raise ValueError("Invalid email address format.")
+        return v
 
 
 class PasswordConfirmRequest(BaseModel):

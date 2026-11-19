@@ -15,11 +15,11 @@ from app.services.citation_parser import NUMERIC_CITATION_PATTERN, AUTHOR_YEAR_P
 
 # Scientific assertion cue patterns
 EMPIRICAL_CUES = [
-    re.compile(r"\b(?:achieved?|outperformed?|demonstrated?|observed?|improved?|increased?|decreased?|reduced?)\b", re.IGNORECASE),
+    re.compile(r"\b(?:achieve[ds]?|outperform[eds]?|demonstrate[ds]?|observe[ds]?|improve[ds]?|increase[ds]?|decrease[ds]?|reduce[ds]?|require[ds]?|report[eds]?|obtain[eds]?|yield[eds]?)\b", re.IGNORECASE),
     re.compile(r"\b(?:results?\s+(?:show|indicate|confirm|demonstrate|prove)s?)\b", re.IGNORECASE),
     re.compile(r"\b(?:we\s+found\s+that|our\s+(?:experiments?|findings?)\s+(?:show|demonstrate|reveal))\b", re.IGNORECASE),
     re.compile(r"\b(?:statistically\s+significant|p\s*[<=]\s*0?\.\d+)\b", re.IGNORECASE),
-    re.compile(r"\b(?:\d+(?:\.\d+)?\s*(?:%|percent|fold|x|ms|seconds?|dB|BLEU|F1|accuracy))\b", re.IGNORECASE),
+    re.compile(r"\b\d+(?:\.\d+)?\s*%(?!\w)|\b\d+(?:\.\d+)?\s*(?:percent|fold|x|ms|seconds?|dB|BLEU|F1|accuracy|million|billion)\b", re.IGNORECASE),
     re.compile(r"\b(?:superior\s+to|higher\s+than|lower\s+than|faster\s+than)\b", re.IGNORECASE),
 ]
 
@@ -83,7 +83,7 @@ def is_empirical_claim(sentence: str) -> Tuple[bool, str]:
     has_author_year = bool(AUTHOR_YEAR_PATTERN.search(sentence))
     if has_numeric or has_author_year:
         # If it also contains comparison or assertive verbs
-        if re.search(r"\b(?:is|are|was|were|has|have|shows|proves|indicates|leads|caused)\b", sentence, re.IGNORECASE):
+        if re.search(r"\b(?:is|are|was|were|has|have|had|shows?|proves?|indicates?|leads?|caused?|connects?|proposes?|evaluates?|uses?|finds?|found)\b", sentence, re.IGNORECASE):
             return True, "citation_backed_statement"
 
     return False, ""
@@ -110,9 +110,24 @@ def extract_claims(
         if any(skip.search(first_line) for skip in SKIP_SECTIONS):
             continue
 
+        # Identify start offset of references section on this page if present
+        ref_header_match = re.search(r"(?:^|\n)\s*(?:REFERENCES|References|BIBLIOGRAPHY|Bibliography)\b", page_text)
+        ref_offset = ref_header_match.start() if ref_header_match else len(page_text)
+
         sentences = split_into_sentences(page_text)
 
         for sent in sentences:
+            # Skip sentences that occur inside the references / bibliography section
+            if sent["start"] >= ref_offset:
+                continue
+
+            # If sentence straddles into references header, trim it before the header
+            if sent["end"] > ref_offset:
+                sent["text"] = page_text[sent["start"]:ref_offset].strip()
+                sent["end"] = ref_offset
+                if len(sent["text"]) < 20:
+                    continue
+
             sentence_text = sent["text"]
 
             # Avoid duplicates

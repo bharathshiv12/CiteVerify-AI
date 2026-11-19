@@ -14,7 +14,7 @@ Responsibility:
     10. REPORT_GENERATION
     11. DONE
 
-    Updates progress and persisted state at each step and handles errors with full auditability.
+    Updates progress, processing jobs, and persisted state at each step with full auditability.
 """
 import logging
 from datetime import datetime, timezone
@@ -40,7 +40,7 @@ from app.services.report_generator import generate_verification_report
 logger = logging.getLogger("citeverify.pipeline_orchestrator")
 
 
-async def run_pipeline(document_id: UUID, repo: AbstractRepository) -> Document:
+async def run_pipeline(document_id: UUID, repo: AbstractRepository) -> Optional[Document]:
     """
     Executes the full 11-stage pipeline for a given document.
     """
@@ -52,12 +52,11 @@ async def run_pipeline(document_id: UUID, repo: AbstractRepository) -> Document:
     storage = get_file_storage()
     # Try anonymous and user storage locations
     rel_path = f"anonymous/{document_id}.pdf"
-    if hasattr(repo, "document_owners"):
-        owner_id = repo.document_owners.get(document_id)
-        if owner_id:
-            user_path = f"{owner_id}/{document_id}.pdf"
-            if await storage.file_exists(user_path):
-                rel_path = user_path
+    owner_id = await repo.get_document_owner(document_id)
+    if owner_id:
+        user_path = f"{owner_id}/{document_id}.pdf"
+        if await storage.file_exists(user_path):
+            rel_path = user_path
 
     try:
         content = await storage.get_file(rel_path)
@@ -66,9 +65,25 @@ async def run_pipeline(document_id: UUID, repo: AbstractRepository) -> Document:
         doc.status = ProcessingStatus.FAILED
         doc.error_message = f"Storage read error: {str(e)}"
         doc.updated_at = datetime.now(timezone.utc)
-        return await repo.update_document(doc)
+        await repo.update_document(doc)
+        await repo.update_processing_job(
+            document_id=document_id,
+            status=ProcessingStatus.FAILED,
+            current_stage=doc.pipeline_stage,
+            progress_percent=0,
+            error_message=doc.error_message,
+        )
+        return doc
 
     try:
+        # Initialize processing job
+        await repo.create_processing_job(
+            document_id=document_id,
+            status=ProcessingStatus.PROCESSING,
+            current_stage=PipelineStage.TEXT_EXTRACTION,
+            progress_percent=15,
+        )
+
         # --- Stage 1: Mark processing & TEXT_EXTRACTION ---
         doc.status = ProcessingStatus.PROCESSING
         doc.pipeline_stage = PipelineStage.TEXT_EXTRACTION
@@ -87,12 +102,26 @@ async def run_pipeline(document_id: UUID, repo: AbstractRepository) -> Document:
             doc.status = ProcessingStatus.FAILED
             doc.error_message = "Scanned image PDF detected with insufficient extractable text."
             doc.updated_at = datetime.now(timezone.utc)
-            return await repo.update_document(doc)
+            await repo.update_document(doc)
+            await repo.update_processing_job(
+                document_id=document_id,
+                status=ProcessingStatus.FAILED,
+                current_stage=PipelineStage.TEXT_EXTRACTION,
+                progress_percent=15,
+                error_message=doc.error_message,
+            )
+            return doc
 
         # --- Stage 2: CLAIM_EXTRACTION ---
         doc.pipeline_stage = PipelineStage.CLAIM_EXTRACTION
         doc.updated_at = datetime.now(timezone.utc)
         await repo.update_document(doc)
+        await repo.update_processing_job(
+            document_id=document_id,
+            status=ProcessingStatus.PROCESSING,
+            current_stage=PipelineStage.CLAIM_EXTRACTION,
+            progress_percent=25,
+        )
         logger.info(f"Pipeline [2/10] CLAIM_EXTRACTION for doc {document_id}")
         claims: List[Claim] = extract_claims(pages, document_id)
 
@@ -100,6 +129,12 @@ async def run_pipeline(document_id: UUID, repo: AbstractRepository) -> Document:
         doc.pipeline_stage = PipelineStage.CITATION_PARSING
         doc.updated_at = datetime.now(timezone.utc)
         await repo.update_document(doc)
+        await repo.update_processing_job(
+            document_id=document_id,
+            status=ProcessingStatus.PROCESSING,
+            current_stage=PipelineStage.CITATION_PARSING,
+            progress_percent=35,
+        )
         logger.info(f"Pipeline [3/10] CITATION_PARSING for doc {document_id}")
         citations: List[Citation] = parse_in_text_citations(pages, document_id)
 
@@ -107,6 +142,12 @@ async def run_pipeline(document_id: UUID, repo: AbstractRepository) -> Document:
         doc.pipeline_stage = PipelineStage.REFERENCE_PARSING
         doc.updated_at = datetime.now(timezone.utc)
         await repo.update_document(doc)
+        await repo.update_processing_job(
+            document_id=document_id,
+            status=ProcessingStatus.PROCESSING,
+            current_stage=PipelineStage.REFERENCE_PARSING,
+            progress_percent=45,
+        )
         logger.info(f"Pipeline [4/10] REFERENCE_PARSING for doc {document_id}")
         references = parse_bibliography_references(pages)
 
@@ -114,17 +155,29 @@ async def run_pipeline(document_id: UUID, repo: AbstractRepository) -> Document:
         doc.pipeline_stage = PipelineStage.CITATION_MATCHING
         doc.updated_at = datetime.now(timezone.utc)
         await repo.update_document(doc)
+        await repo.update_processing_job(
+            document_id=document_id,
+            status=ProcessingStatus.PROCESSING,
+            current_stage=PipelineStage.CITATION_MATCHING,
+            progress_percent=55,
+        )
         logger.info(f"Pipeline [5/10] CITATION_MATCHING for doc {document_id}")
         claims = match_claims_to_citations(claims, citations, references)
         await repo.save_citations(citations)
+        await repo.save_claims(claims)
 
         # --- Stage 6: PAPER_RETRIEVAL ---
         doc.pipeline_stage = PipelineStage.PAPER_RETRIEVAL
         doc.updated_at = datetime.now(timezone.utc)
         await repo.update_document(doc)
+        await repo.update_processing_job(
+            document_id=document_id,
+            status=ProcessingStatus.PROCESSING,
+            current_stage=PipelineStage.PAPER_RETRIEVAL,
+            progress_percent=70,
+        )
         logger.info(f"Pipeline [6/10] PAPER_RETRIEVAL for doc {document_id}")
 
-        # Retrieve publication for citations with reference text
         paper_cache: Dict[str, ResearchPaper] = {}
         for cit in citations:
             ref_key = cit.reference_text or cit.raw_marker
@@ -133,8 +186,8 @@ async def run_pipeline(document_id: UUID, repo: AbstractRepository) -> Document:
 
             if ref_key not in paper_cache:
                 paper = await retrieve_publication(ref_key)
-                await repo.save_paper(paper)
-                paper_cache[ref_key] = paper
+                saved_paper = await repo.save_paper(paper)
+                paper_cache[ref_key] = saved_paper
 
             resolved_paper = paper_cache[ref_key]
             cit.matched_paper_id = resolved_paper.id
@@ -144,6 +197,12 @@ async def run_pipeline(document_id: UUID, repo: AbstractRepository) -> Document:
         doc.pipeline_stage = PipelineStage.EVIDENCE_EXTRACTION
         doc.updated_at = datetime.now(timezone.utc)
         await repo.update_document(doc)
+        await repo.update_processing_job(
+            document_id=document_id,
+            status=ProcessingStatus.PROCESSING,
+            current_stage=PipelineStage.EVIDENCE_EXTRACTION,
+            progress_percent=80,
+        )
         logger.info(f"Pipeline [7/10] EVIDENCE_EXTRACTION for doc {document_id}")
 
         for claim in claims:
@@ -167,10 +226,15 @@ async def run_pipeline(document_id: UUID, repo: AbstractRepository) -> Document:
         doc.pipeline_stage = PipelineStage.VERIFICATION
         doc.updated_at = datetime.now(timezone.utc)
         await repo.update_document(doc)
+        await repo.update_processing_job(
+            document_id=document_id,
+            status=ProcessingStatus.PROCESSING,
+            current_stage=PipelineStage.VERIFICATION,
+            progress_percent=90,
+        )
         logger.info(f"Pipeline [8/10] VERIFICATION for doc {document_id}")
 
         for claim in claims:
-            # Determine paper year if available
             paper_year = None
             if claim.citations:
                 for cit in claim.citations:
@@ -200,6 +264,12 @@ async def run_pipeline(document_id: UUID, repo: AbstractRepository) -> Document:
         doc.pipeline_stage = PipelineStage.REPORT_GENERATION
         doc.updated_at = datetime.now(timezone.utc)
         await repo.update_document(doc)
+        await repo.update_processing_job(
+            document_id=document_id,
+            status=ProcessingStatus.PROCESSING,
+            current_stage=PipelineStage.REPORT_GENERATION,
+            progress_percent=95,
+        )
         logger.info(f"Pipeline [9/10] REPORT_GENERATION for doc {document_id}")
 
         report = generate_verification_report(doc, claims)
@@ -211,6 +281,12 @@ async def run_pipeline(document_id: UUID, repo: AbstractRepository) -> Document:
         doc.error_message = None
         doc.updated_at = datetime.now(timezone.utc)
         await repo.update_document(doc)
+        await repo.update_processing_job(
+            document_id=document_id,
+            status=ProcessingStatus.COMPLETED,
+            current_stage=PipelineStage.DONE,
+            progress_percent=100,
+        )
         logger.info(f"Pipeline completed successfully for doc {document_id}")
 
         return doc
@@ -220,4 +296,12 @@ async def run_pipeline(document_id: UUID, repo: AbstractRepository) -> Document:
         doc.status = ProcessingStatus.FAILED
         doc.error_message = f"Pipeline execution error: {str(e)}"
         doc.updated_at = datetime.now(timezone.utc)
-        return await repo.update_document(doc)
+        await repo.update_document(doc)
+        await repo.update_processing_job(
+            document_id=document_id,
+            status=ProcessingStatus.FAILED,
+            current_stage=doc.pipeline_stage,
+            progress_percent=0,
+            error_message=doc.error_message,
+        )
+        return doc
