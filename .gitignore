@@ -92,3 +92,10 @@ ai_engine/data/processed/
 .idea/
 *.sublime-project
 *.sublime-workspace
+
+# Backend additions (append-only)
+backend/.env
+backend/uploads/
+backend/storage_data/
+*.pdf
+
