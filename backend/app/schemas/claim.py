@@ -40,3 +40,9 @@ class ClaimListResponse(BaseModel):
     page_size: int = Field(default=20, ge=1, le=100)
     total: int = Field(default=0, ge=0)
 
+
+class ClaimPatchRequest(BaseModel):
+    claim_text: str = Field(..., min_length=5)
+    char_span: List[int] = Field(..., min_length=2, max_length=2)
+
+

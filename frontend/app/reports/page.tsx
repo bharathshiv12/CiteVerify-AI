@@ -7,8 +7,8 @@ import { SearchInput } from "../../components/ui/search-input";
 import { Button } from "../../components/ui/button";
 import { EmptyState } from "../../components/ui/empty-state";
 import { useAuth } from "../../lib/supabase/auth-context";
-import { getRegisteredDocuments, RegisteredDocument } from "../../lib/document-registry";
-import { getDocumentReport, USE_MOCKS } from "../../services/api";
+import { getRegisteredDocuments, registerDocument, RegisteredDocument } from "../../lib/document-registry";
+import { getDocumentReport, listDocuments, USE_MOCKS } from "../../services/api";
 import { VerificationReport } from "../../types";
 import {
   FileText,
@@ -28,39 +28,66 @@ export default function ReportsListPage() {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const docs = getRegisteredDocuments(user?.id);
-    setDocuments(docs);
+    async function loadReports() {
+      let docs = getRegisteredDocuments(user?.id);
 
-    if (docs.length === 0 && USE_MOCKS) {
-      const mockDoc: RegisteredDocument = {
-        document_id: "00000000-0000-0000-0000-000000000001",
-        filename: "synthetic_sample_paper_v1.pdf",
-        uploaded_at: new Date().toISOString(),
-      };
-      setDocuments([mockDoc]);
-      getDocumentReport(mockDoc.document_id)
-        .then((rep) => setReportsMap({ [mockDoc.document_id]: rep }))
-        .finally(() => setIsLoading(false));
-      return;
+      if (user && !USE_MOCKS) {
+        try {
+          const remote = await listDocuments(1, 50);
+          if (remote?.items?.length) {
+            remote.items.forEach((rd) => {
+              registerDocument(
+                {
+                  document_id: rd.id,
+                  filename: rd.filename,
+                  uploaded_at: rd.created_at,
+                  file_size_bytes: rd.file_size_bytes,
+                  status: rd.status,
+                  pipeline_stage: rd.pipeline_stage,
+                },
+                user.id
+              );
+            });
+            docs = getRegisteredDocuments(user.id);
+          }
+        } catch {}
+      }
+
+      setDocuments(docs);
+
+      if (docs.length === 0 && USE_MOCKS) {
+        const mockDoc: RegisteredDocument = {
+          document_id: "00000000-0000-0000-0000-000000000001",
+          filename: "synthetic_sample_paper_v1.pdf",
+          uploaded_at: new Date().toISOString(),
+        };
+        setDocuments([mockDoc]);
+        getDocumentReport(mockDoc.document_id)
+          .then((rep) => setReportsMap({ [mockDoc.document_id]: rep }))
+          .finally(() => setIsLoading(false));
+        return;
+      }
+
+      Promise.all(
+        docs.map(async (doc) => {
+          try {
+            const rep = await getDocumentReport(doc.document_id);
+            return { id: doc.document_id, rep };
+          } catch {
+            return null;
+          }
+        })
+      ).then((res) => {
+        const map: Record<string, VerificationReport> = {};
+        res.forEach((r) => {
+          if (r && r.rep) map[r.id] = r.rep;
+        });
+        setReportsMap(map);
+        setIsLoading(false);
+      });
     }
 
-    Promise.all(
-      docs.map(async (doc) => {
-        try {
-          const rep = await getDocumentReport(doc.document_id);
-          return { id: doc.document_id, rep };
-        } catch {
-          return null;
-        }
-      })
-    ).then((res) => {
-      const map: Record<string, VerificationReport> = {};
-      res.forEach((r) => {
-        if (r && r.rep) map[r.id] = r.rep;
-      });
-      setReportsMap(map);
-      setIsLoading(false);
-    });
+    loadReports();
   }, [user]);
 
   const filteredDocs = documents.filter((d) =>

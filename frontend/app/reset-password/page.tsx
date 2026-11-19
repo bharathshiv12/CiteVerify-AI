@@ -5,32 +5,60 @@ import { useRouter } from "next/navigation";
 import { Logo } from "../../components/brand/logo";
 import { PasswordInput } from "../../components/ui/password-input";
 import { Button } from "../../components/ui/button";
+import { useAuth } from "../../lib/supabase/auth-context";
 import { getSupabaseClient } from "../../lib/supabase/client";
 import { CheckCircle2 } from "lucide-react";
 
 export default function ResetPasswordPage() {
   const router = useRouter();
+  const { isConfigured } = useAuth();
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
+  // Field validation checks for button enabling
+  const isPasswordValid =
+    newPassword.length >= 8 &&
+    /[A-Z]/.test(newPassword) &&
+    /[a-z]/.test(newPassword) &&
+    /[0-9]/.test(newPassword);
+  const isPasswordMatch = newPassword.length > 0 && newPassword === confirmPassword;
+  const isFormValid = isPasswordValid && isPasswordMatch;
+  const isSubmitDisabled = !isConfigured || isLoading || !isFormValid;
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError(null);
+
+    if (newPassword.length < 8) {
+      setError("Password must be at least 8 characters in length.");
+      return;
+    }
+
+    if (!/[A-Z]/.test(newPassword) || !/[a-z]/.test(newPassword) || !/[0-9]/.test(newPassword)) {
+      setError("Password must contain at least one uppercase letter, one lowercase letter, and one number.");
+      return;
+    }
+
     if (newPassword !== confirmPassword) {
-      setError("Passwords do not match.");
+      setError("Passwords do not match. Please re-enter matching passwords.");
+      return;
+    }
+
+    if (!isConfigured) {
+      setError("Authentication service is currently unavailable. Supabase environment credentials are not configured.");
       return;
     }
 
     const supabase = getSupabaseClient();
     if (!supabase) {
-      setSuccess(true);
+      setError("Authentication service is not configured. Please contact the administrator.");
       return;
     }
 
     setIsLoading(true);
-    setError(null);
 
     const { error: updateError } = await supabase.auth.updateUser({
       password: newPassword,
@@ -83,18 +111,28 @@ export default function ResetPasswordPage() {
               <PasswordInput
                 label="New Password"
                 required
+                autoComplete="new-password"
                 value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
+                onChange={(e) => {
+                  setNewPassword(e.target.value);
+                  if (error) setError(null);
+                }}
                 showStrengthChecklist
                 placeholder="••••••••"
+                disabled={isLoading}
               />
 
               <PasswordInput
                 label="Confirm New Password"
                 required
+                autoComplete="new-password"
                 value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
+                onChange={(e) => {
+                  setConfirmPassword(e.target.value);
+                  if (error) setError(null);
+                }}
                 placeholder="••••••••"
+                disabled={isLoading}
               />
 
               {error && (
@@ -103,15 +141,24 @@ export default function ResetPasswordPage() {
                 </div>
               )}
 
-              <Button
-                type="submit"
-                variant="primary"
-                size="standard"
-                className="w-full"
-                isLoading={isLoading}
-              >
-                Update Password
-              </Button>
+              <div>
+                <Button
+                  type="submit"
+                  variant="primary"
+                  size="standard"
+                  className="w-full"
+                  isLoading={isLoading}
+                  disabled={isSubmitDisabled}
+                >
+                  Update Password
+                </Button>
+
+                {!isConfigured && (
+                  <p className="text-center text-[11px] text-[#A08B78] dark:text-[#8C7A6A] pt-2">
+                    Supabase authentication pending configuration in <code className="font-mono text-[10px]">.env.local</code> (submission disabled)
+                  </p>
+                )}
+              </div>
             </form>
           )}
         </div>

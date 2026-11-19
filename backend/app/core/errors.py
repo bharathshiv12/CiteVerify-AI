@@ -1,5 +1,6 @@
 """
 Standardized error hierarchy and FastAPI exception handlers returning ErrorEnvelope.
+Complies with contracts/schemas/error.schema.json.
 """
 import uuid
 import logging
@@ -27,6 +28,36 @@ class AppException(Exception):
         self.details = details or {}
 
 
+class BadRequestError(AppException):
+    def __init__(self, message: str, details: Optional[Dict[str, Any]] = None):
+        super().__init__(
+            code="BAD_REQUEST",
+            message=message,
+            status_code=status.HTTP_400_BAD_REQUEST,
+            details=details or {},
+        )
+
+
+class UnauthorizedError(AppException):
+    def __init__(self, message: str = "Authentication credentials were not provided or are invalid.", details: Optional[Dict[str, Any]] = None):
+        super().__init__(
+            code="UNAUTHORIZED",
+            message=message,
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            details=details or {},
+        )
+
+
+class ForbiddenError(AppException):
+    def __init__(self, message: str = "You do not have permission to access this resource.", details: Optional[Dict[str, Any]] = None):
+        super().__init__(
+            code="FORBIDDEN",
+            message=message,
+            status_code=status.HTTP_403_FORBIDDEN,
+            details=details or {},
+        )
+
+
 class NotFoundError(AppException):
     def __init__(self, resource: str, identifier: str):
         super().__init__(
@@ -48,11 +79,11 @@ class ConflictError(AppException):
 
 
 class PayloadTooLargeError(AppException):
-    def __init__(self, message: str, details: Optional[Dict[str, Any]] = None):
+    def __init__(self, message: str = "Uploaded file exceeds maximum allowed size.", details: Optional[Dict[str, Any]] = None):
         super().__init__(
             code="PAYLOAD_TOO_LARGE",
             message=message,
-            status_code=413,
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
             details=details or {},
         )
 
@@ -63,6 +94,26 @@ class InvalidFileError(AppException):
             code="INVALID_FILE",
             message=message,
             status_code=status.HTTP_400_BAD_REQUEST,
+            details=details or {},
+        )
+
+
+class RateLimitExceededError(AppException):
+    def __init__(self, message: str = "Rate limit exceeded. Please retry after some time.", details: Optional[Dict[str, Any]] = None):
+        super().__init__(
+            code="RATE_LIMIT_EXCEEDED",
+            message=message,
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            details=details or {},
+        )
+
+
+class ServiceUnavailableError(AppException):
+    def __init__(self, message: str = "Service is temporarily unconfigured or unavailable.", details: Optional[Dict[str, Any]] = None):
+        super().__init__(
+            code="SERVICE_UNAVAILABLE",
+            message=message,
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             details=details or {},
         )
 
@@ -97,7 +148,9 @@ async def http_exception_handler(request: Request, exc: StarletteHTTPException) 
         409: "CONFLICT",
         413: "PAYLOAD_TOO_LARGE",
         422: "UNPROCESSABLE_ENTITY",
+        429: "RATE_LIMIT_EXCEEDED",
         500: "INTERNAL_SERVER_ERROR",
+        503: "SERVICE_UNAVAILABLE",
     }
     code = code_map.get(exc.status_code, "HTTP_ERROR")
     return JSONResponse(
@@ -105,8 +158,8 @@ async def http_exception_handler(request: Request, exc: StarletteHTTPException) 
         content={
             "error": {
                 "code": code,
-                "message": str(exc.detail),
-                "details": {},
+                "message": exc.detail if isinstance(exc.detail, str) else str(exc.detail),
+                "details": exc.detail if isinstance(exc.detail, dict) else {},
                 "request_id": request_id,
             }
         },
@@ -115,13 +168,18 @@ async def http_exception_handler(request: Request, exc: StarletteHTTPException) 
 
 async def validation_exception_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
     request_id = get_request_id(request)
+    errors = []
+    for err in exc.errors():
+        field = ".".join(str(loc) for loc in err.get("loc", []))
+        errors.append({"field": field, "message": err.get("msg", ""), "type": err.get("type", "")})
+
     return JSONResponse(
-        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        status_code=status.HTTP_400_BAD_REQUEST,
         content={
             "error": {
                 "code": "VALIDATION_ERROR",
-                "message": "Input validation failed for request payload.",
-                "details": {"errors": exc.errors()},
+                "message": "Input validation failed against canonical schema.",
+                "details": {"validation_errors": errors},
                 "request_id": request_id,
             }
         },
@@ -130,16 +188,15 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 
 async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
     request_id = get_request_id(request)
-    logger.exception(f"Unhandled exception on request {request_id}: {exc}")
+    logger.exception(f"[{request_id}] Unhandled internal exception: {exc}")
     return JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         content={
             "error": {
                 "code": "INTERNAL_SERVER_ERROR",
-                "message": "An unexpected internal server error occurred.",
+                "message": "An unexpected server error occurred. Please contact support with the request ID.",
                 "details": {},
                 "request_id": request_id,
             }
         },
     )
-
