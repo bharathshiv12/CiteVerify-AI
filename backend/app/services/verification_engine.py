@@ -22,6 +22,7 @@ from app.core.config import settings
 from app.schemas.evidence import Evidence
 from app.schemas.verification import Verification
 from app.schemas.enums import VerificationVerdict, VerificationState, EvidenceLevel, RetrievalStatus
+from app.services.ml_engine import check_numerical_consistency, evaluate_nli
 
 logger = logging.getLogger("citeverify.verification_engine")
 
@@ -104,11 +105,9 @@ async def verify_claim_against_evidence(
         except Exception as ex:
             logger.warning(f"External AI verification failed, falling back to deterministic NLI: {ex}")
 
-    # 3. Deterministic Heuristic NLI Verification
-    claim_nums = set(extract_numbers(claim_text))
-    evidence_nums = set(extract_numbers(top_passage))
-    claim_neg = has_negation(claim_text)
-    evidence_neg = has_negation(top_passage)
+    # 3. ML-Enhanced Verification: Pretrained NLI + Explicit Numerical Verification
+    num_result = check_numerical_consistency(claim_text, top_passage)
+    nli_result = evaluate_nli(premise=top_passage, hypothesis=claim_text)
 
     # Outdated check
     is_outdated = False
@@ -121,37 +120,30 @@ async def verify_claim_against_evidence(
     confidence: float = 0.0
     rationale: str = ""
 
-    # Detect numeric contradiction
-    # If claim mentions a specific number/percent that is contradicted in evidence
-    numeric_conflict = False
-    if claim_nums and evidence_nums and not claim_nums.intersection(evidence_nums):
-        # Both discuss quantitative findings but values do not match
-        numeric_conflict = True
+    # Check for severe numerical contradictions
+    if num_result.severity == "HIGH_CONTRADICTION":
+        verdict = VerificationVerdict.CONTRADICTORY
+        confidence = min(0.95, round(top_score + 0.2, 2))
+        rationale = f"Numerical/statistical discrepancy: {'; '.join(num_result.discrepancy_reasons)}"
+        review_reasons.extend(num_result.discrepancy_reasons)
 
-    # Polarity conflict: one has negation, the other does not
-    polarity_conflict = (claim_neg != evidence_neg)
+    # Check for NLI contradiction
+    elif nli_result.get("label") == "CONTRADICTION":
+        verdict = VerificationVerdict.CONTRADICTORY
+        confidence = min(0.90, round(float(nli_result.get("confidence", 0.7)), 2))
+        rationale = "Retrieved evidence directly contradicts the factual assertion made in the claim."
+        review_reasons.append("Pretrained NLI classifier identified semantic contradiction with source passage.")
 
-    if top_score < 0.15:
-        # Rule 4: Insufficient evidence -> null verdict
+    # Insufficient / Low overlap check (Rule 4: never force binary verdict)
+    elif top_score < 0.15:
         verdict = None
         verification_state = VerificationState.REQUIRES_HUMAN_REVIEW
         confidence = round(top_score, 2)
         rationale = "Retrieved passage has low semantic overlap with the specific assertion in the claim."
         review_reasons.append("Low semantic alignment with retrieved evidence passage.")
 
-    elif numeric_conflict and top_score >= 0.25:
-        verdict = VerificationVerdict.CONTRADICTORY
-        confidence = min(0.90, round(top_score + 0.2, 2))
-        rationale = f"Evidence contains conflicting numerical figures ({', '.join(evidence_nums)}) compared to the claim ({', '.join(claim_nums)})."
-        review_reasons.append("Conflicting quantitative figures detected between claim and source evidence.")
-
-    elif polarity_conflict and top_score >= 0.35:
-        verdict = VerificationVerdict.CONTRADICTORY
-        confidence = min(0.85, round(top_score + 0.1, 2))
-        rationale = "Evidence expresses contradictory polarity or negated finding regarding the asserted claim."
-        review_reasons.append("Directional polarity or negation conflict detected.")
-
-    elif top_score >= 0.45:
+    # Entailment / Corroboration
+    elif nli_result.get("label") == "ENTAILMENT" or top_score >= 0.45:
         if is_outdated:
             verdict = VerificationVerdict.POTENTIALLY_OUTDATED
             confidence = min(0.95, round(top_score, 2))
@@ -161,7 +153,10 @@ async def verify_claim_against_evidence(
             verdict = VerificationVerdict.SUPPORTED
             confidence = min(0.95, round(top_score + 0.1, 2))
             rationale = "Retrieved scholarly passage directly corroborates the factual assertion made in the claim."
+            if num_result.matched_facts:
+                rationale += f" Corroborated details: {'; '.join(num_result.matched_facts)}"
 
+    # Partial Support
     elif top_score >= 0.25:
         if is_outdated:
             verdict = VerificationVerdict.POTENTIALLY_OUTDATED
@@ -173,13 +168,17 @@ async def verify_claim_against_evidence(
             confidence = round(top_score, 2)
             rationale = "Retrieved passage provides partial or contextual support for the claim but does not corroborate all nuances."
 
+    # Neutral / Ambiguous
     else:
-        # Low-medium score where evidence is ambiguous
         verdict = None
         verification_state = VerificationState.REQUIRES_HUMAN_REVIEW
         confidence = round(top_score, 2)
         rationale = "Passage discusses related concepts but does not provide definitive evidence to either corroborate or refute the claim."
         review_reasons.append("Ambiguous evidence alignment requires domain expert review.")
+
+    # Add low-severity numerical discrepancies if any
+    if num_result.has_discrepancy and num_result.severity != "HIGH_CONTRADICTION":
+        review_reasons.extend(num_result.discrepancy_reasons)
 
     # Flag for human review if confidence is below 0.65 or if reasons exist
     needs_review = bool(review_reasons or confidence < 0.65 or verdict is None)

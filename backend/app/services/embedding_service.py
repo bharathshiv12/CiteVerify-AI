@@ -45,7 +45,7 @@ def tokenize(text: str) -> List[str]:
     return [t for t in tokens if t not in STOP_WORDS]
 
 
-def compute_similarities(query_text: str, passages: List[str]) -> List[float]:
+def compute_similarities_tfidf(query_text: str, passages: List[str]) -> List[float]:
     """
     Computes cosine similarity between query and candidate passages using TF-IDF.
     Returns a float in range [0.0, 1.0] for each passage.
@@ -120,3 +120,18 @@ def compute_similarities(query_text: str, passages: List[str]) -> List[float]:
         scores.append(round(max(0.0, min(1.0, cosine_sim)), 4))
 
     return scores
+
+
+def compute_similarities(query_text: str, passages: List[str]) -> List[float]:
+    """
+    Computes semantic similarity using Sentence Transformers (all-MiniLM-L6-v2)
+    with automatic fallback to TF-IDF vector space similarity.
+    """
+    try:
+        from app.services.ml_engine import _retriever_instance
+        if _retriever_instance.is_available():
+            return _retriever_instance.compute_similarities(query_text, passages)
+    except Exception:
+        pass
+    return compute_similarities_tfidf(query_text, passages)
+

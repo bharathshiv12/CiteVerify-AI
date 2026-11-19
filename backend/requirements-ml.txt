@@ -1,0 +1,11 @@
+# CiteVerify AI — Optional Machine Learning Dependencies (CPU-Optimized)
+# Install via: pip install -r backend/requirements-ml.txt
+#
+# These packages enable pretrained Sentence Transformers semantic search
+# and Hugging Face Natural Language Inference (NLI) classification.
+# The backend operates fully with deterministic fallbacks when these are omitted.
+
+torch>=2.2.0
+transformers>=4.40.0
+sentence-transformers>=3.0.0
+numpy>=1.26.0

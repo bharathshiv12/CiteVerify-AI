@@ -100,23 +100,49 @@ All 20 endpoints are mounted under `/api` and verified live via FastAPI's OpenAP
 
 ## 5. Test Suite Verification
 
-A comprehensive test suite containing **50 tests** covers 100% of the backend modules with zero external network or database dependencies:
+A comprehensive test suite containing **65 tests** covers 100% of the backend modules with zero external network or database dependencies:
 
 ```
-backend/tests/test_auth.py                      6 passed [12%]
-backend/tests/test_claim_and_citation.py         5 passed [22%]
-backend/tests/test_contract.py                  6 passed [34%]
-backend/tests/test_document_routes.py           1 passed [36%]
-backend/tests/test_health.py                    1 passed [38%]
-backend/tests/test_pdf_processing.py            6 passed [50%]
-backend/tests/test_pipeline.py                  1 passed [52%]
-backend/tests/test_repository.py                1 passed [54%]
-backend/tests/test_research_clients.py          5 passed [64%]
-backend/tests/test_routes_phase9.py             4 passed [72%]
-backend/tests/test_upload_validation.py         6 passed [84%]
+backend/tests/test_auth.py                      6 passed [9%]
+backend/tests/test_claim_and_citation.py         5 passed [17%]
+backend/tests/test_contract.py                  6 passed [26%]
+backend/tests/test_document_routes.py           1 passed [28%]
+backend/tests/test_health.py                    1 passed [29%]
+backend/tests/test_ml_engine.py                15 passed [52%]
+backend/tests/test_pdf_processing.py            6 passed [62%]
+backend/tests/test_pipeline.py                  1 passed [63%]
+backend/tests/test_repository.py                1 passed [65%]
+backend/tests/test_research_clients.py          5 passed [72%]
+backend/tests/test_routes_phase9.py             4 passed [78%]
+backend/tests/test_upload_validation.py         6 passed [88%]
 backend/tests/test_verification_and_evidence.py 8 passed [100%]
-============================== 50 passed in 1.00s ==============================
+============================== 65 passed in 1.34s ==============================
 ```
+
+---
+
+## 5.1 Pretrained Machine Learning Engine Integration
+
+The verification engine incorporates modular pretrained ML services (`backend/app/services/ml_engine.py`) optimized for standard CPU execution:
+
+1. **Semantic Evidence Retrieval (`SentenceTransformerRetriever`):**
+   - **Model:** `sentence-transformers/all-MiniLM-L6-v2` (Apache-2.0, 384-dimensional dense vectors, ~80MB, fast CPU inference).
+   - **Fallback:** In offline, containerized, or minimal environments where `sentence-transformers` is omitted, automatically falls back to the deterministic TF-IDF vector space model with zero downtime.
+
+2. **Evidence Classification (`PretrainedNLIClassifier`):**
+   - **Model:** `cross-encoder/nli-deberta-v3-small` (MIT / Apache-2.0, ~100MB, CPU execution).
+   - **Classes:** Evaluates `ENTAILMENT`, `CONTRADICTION`, and `NEUTRAL`.
+   - **Scientific Limitations Documented:** General-domain NLI models (trained on MultiNLI/SNLI) are not fine-tuned on specialized biochemical or clinical corpora. Raw model confidence scores are therefore **never** presented as calibrated scientific certainty, and ambiguous/neutral predictions remain strictly unforced (`verdict = null`, `needs_human_review = True`).
+   - **Fallback:** Seamlessly falls back to deterministic lexical, polarity, and semantic NLI rules if the model or dependencies are unavailable.
+
+3. **Explicit Numerical Verification (`NumericalVerifier`):**
+   - Evaluates empirical claims against evidence for:
+     - **Percentages** (detecting precision discrepancies > 5.0%, e.g., 95% vs 42%).
+     - **Sample sizes** (e.g., $N=2500$ vs $n=45$).
+     - **Quantities & Units** (identifying unit conflicts, e.g., $50\text{ mg}$ vs $50\text{ g}$).
+     - **Statistical Significance Inversions** (detecting claims of $p < 0.05$ contradicted by evidence of $p > 0.05$ or "no significant difference").
+     - **Dates & Chronological Consistency**.
+   - Prevents reliance solely on semantic text similarity when numerical facts conflict.
 
 ---
 
