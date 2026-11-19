@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://citeverify.ai/schemas/enums.json",
+  "title": "CiteVerifyEnums",
+  "description": "Canonical enumerations used across CiteVerify contracts, backend models, and frontend interfaces.",
+  "type": "object",
+  "definitions": {
+    "VerificationVerdict": {
+      "type": "string",
+      "enum": [
+        "SUPPORTED",
+        "PARTLY_SUPPORTED",
+        "UNSUPPORTED",
+        "CONTRADICTORY",
+        "POTENTIALLY_OUTDATED"
+      ]
+    },
+    "ProcessingStatus": {
+      "type": "string",
+      "enum": [
+        "PENDING",
+        "PROCESSING",
+        "COMPLETED",
+        "FAILED"
+      ]
+    },
+    "VerificationState": {
+      "type": "string",
+      "enum": [
+        "VERIFIED",
+        "REQUIRES_HUMAN_REVIEW",
+        "UNABLE_TO_VERIFY",
+        "PENDING"
+      ]
+    },
+    "EvidenceLevel": {
+      "type": "string",
+      "enum": [
+        "FULL_TEXT",
+        "ABSTRACT_ONLY",
+        "METADATA_ONLY",
+        "NONE"
+      ]
+    },
+    "RetrievalStatus": {
+      "type": "string",
+      "enum": [
+        "RETRIEVED",
+        "NOT_FOUND",
+        "PAYWALLED",
+        "API_ERROR"
+      ]
+    },
+    "PipelineStage": {
+      "type": "string",
+      "enum": [
+        "UPLOADED",
+        "TEXT_EXTRACTION",
+        "CLAIM_EXTRACTION",
+        "CITATION_PARSING",
+        "REFERENCE_PARSING",
+        "CITATION_MATCHING",
+        "PAPER_RETRIEVAL",
+        "EVIDENCE_EXTRACTION",
+        "VERIFICATION",
+        "REPORT_GENERATION",
+        "DONE"
+      ]
+    }
+  }
+}

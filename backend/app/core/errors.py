@@ -1,0 +1,145 @@
+"""
+Standardized error hierarchy and FastAPI exception handlers returning ErrorEnvelope.
+"""
+import uuid
+import logging
+from typing import Any, Dict, Optional
+from fastapi import Request, status
+from fastapi.responses import JSONResponse
+from fastapi.exceptions import RequestValidationError
+from starlette.exceptions import HTTPException as StarletteHTTPException
+
+logger = logging.getLogger("citeverify.errors")
+
+
+class AppException(Exception):
+    def __init__(
+        self,
+        code: str,
+        message: str,
+        status_code: int = status.HTTP_400_BAD_REQUEST,
+        details: Optional[Dict[str, Any]] = None,
+    ):
+        super().__init__(message)
+        self.code = code
+        self.message = message
+        self.status_code = status_code
+        self.details = details or {}
+
+
+class NotFoundError(AppException):
+    def __init__(self, resource: str, identifier: str):
+        super().__init__(
+            code="NOT_FOUND",
+            message=f"{resource} with identifier '{identifier}' was not found.",
+            status_code=status.HTTP_404_NOT_FOUND,
+            details={"resource": resource, "identifier": identifier},
+        )
+
+
+class ConflictError(AppException):
+    def __init__(self, message: str, details: Optional[Dict[str, Any]] = None):
+        super().__init__(
+            code="CONFLICT",
+            message=message,
+            status_code=status.HTTP_409_CONFLICT,
+            details=details or {},
+        )
+
+
+class PayloadTooLargeError(AppException):
+    def __init__(self, message: str, details: Optional[Dict[str, Any]] = None):
+        super().__init__(
+            code="PAYLOAD_TOO_LARGE",
+            message=message,
+            status_code=413,
+            details=details or {},
+        )
+
+
+class InvalidFileError(AppException):
+    def __init__(self, message: str, details: Optional[Dict[str, Any]] = None):
+        super().__init__(
+            code="INVALID_FILE",
+            message=message,
+            status_code=status.HTTP_400_BAD_REQUEST,
+            details=details or {},
+        )
+
+
+def get_request_id(request: Request) -> str:
+    return getattr(request.state, "request_id", str(uuid.uuid4()))
+
+
+async def app_exception_handler(request: Request, exc: AppException) -> JSONResponse:
+    request_id = get_request_id(request)
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={
+            "error": {
+                "code": exc.code,
+                "message": exc.message,
+                "details": exc.details,
+                "request_id": request_id,
+            }
+        },
+    )
+
+
+async def http_exception_handler(request: Request, exc: StarletteHTTPException) -> JSONResponse:
+    request_id = get_request_id(request)
+    code_map = {
+        400: "BAD_REQUEST",
+        401: "UNAUTHORIZED",
+        403: "FORBIDDEN",
+        404: "NOT_FOUND",
+        405: "METHOD_NOT_ALLOWED",
+        409: "CONFLICT",
+        413: "PAYLOAD_TOO_LARGE",
+        422: "UNPROCESSABLE_ENTITY",
+        500: "INTERNAL_SERVER_ERROR",
+    }
+    code = code_map.get(exc.status_code, "HTTP_ERROR")
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={
+            "error": {
+                "code": code,
+                "message": str(exc.detail),
+                "details": {},
+                "request_id": request_id,
+            }
+        },
+    )
+
+
+async def validation_exception_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
+    request_id = get_request_id(request)
+    return JSONResponse(
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        content={
+            "error": {
+                "code": "VALIDATION_ERROR",
+                "message": "Input validation failed for request payload.",
+                "details": {"errors": exc.errors()},
+                "request_id": request_id,
+            }
+        },
+    )
+
+
+async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    request_id = get_request_id(request)
+    logger.exception(f"Unhandled exception on request {request_id}: {exc}")
+    return JSONResponse(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        content={
+            "error": {
+                "code": "INTERNAL_SERVER_ERROR",
+                "message": "An unexpected internal server error occurred.",
+                "details": {},
+                "request_id": request_id,
+            }
+        },
+    )
+

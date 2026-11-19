@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://citeverify.ai/schemas/report.schema.json",
+  "title": "VerificationReport",
+  "description": "Comprehensive structured verification report for an academic document.",
+  "type": "object",
+  "required": [
+    "document_id",
+    "filename",
+    "generated_at",
+    "total_claims",
+    "verdict_counts",
+    "evidence_level_counts",
+    "reliability_score",
+    "human_review_required_count",
+    "claims"
+  ],
+  "properties": {
+    "document_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "filename": {
+      "type": "string"
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "total_claims": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "reliability_score": {
+      "type": "number",
+      "minimum": 0.0,
+      "maximum": 100.0,
+      "description": "Aggregate citation integrity score (0 to 100) based on verified claims and evidence strength"
+    },
+    "verdict_counts": {
+      "type": "object",
+      "required": [
+        "SUPPORTED",
+        "PARTLY_SUPPORTED",
+        "UNSUPPORTED",
+        "CONTRADICTORY",
+        "POTENTIALLY_OUTDATED",
+        "UNVERIFIED"
+      ],
+      "properties": {
+        "SUPPORTED": { "type": "integer", "minimum": 0 },
+        "PARTLY_SUPPORTED": { "type": "integer", "minimum": 0 },
+        "UNSUPPORTED": { "type": "integer", "minimum": 0 },
+        "CONTRADICTORY": { "type": "integer", "minimum": 0 },
+        "POTENTIALLY_OUTDATED": { "type": "integer", "minimum": 0 },
+        "UNVERIFIED": { "type": "integer", "minimum": 0 }
+      },
+      "additionalProperties": false
+    },
+    "evidence_level_counts": {
+      "type": "object",
+      "required": ["FULL_TEXT", "ABSTRACT_ONLY", "METADATA_ONLY", "NONE"],
+      "properties": {
+        "FULL_TEXT": { "type": "integer", "minimum": 0 },
+        "ABSTRACT_ONLY": { "type": "integer", "minimum": 0 },
+        "METADATA_ONLY": { "type": "integer", "minimum": 0 },
+        "NONE": { "type": "integer", "minimum": 0 }
+      },
+      "additionalProperties": false
+    },
+    "human_review_required_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "claims": {
+      "type": "array",
+      "items": { "$ref": "claim.schema.json" }
+    }
+  },
+  "additionalProperties": false
+}

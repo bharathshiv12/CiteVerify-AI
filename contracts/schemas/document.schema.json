@@ -1,0 +1,69 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://citeverify.ai/schemas/document.schema.json",
+  "title": "Document",
+  "description": "Represents an uploaded academic document and its processing state.",
+  "type": "object",
+  "required": [
+    "id",
+    "filename",
+    "file_size_bytes",
+    "mime_type",
+    "status",
+    "pipeline_stage",
+    "created_at",
+    "updated_at"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique UUID of the document"
+    },
+    "filename": {
+      "type": "string",
+      "description": "Original filename of the uploaded PDF"
+    },
+    "file_size_bytes": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Size of the PDF file in bytes"
+    },
+    "mime_type": {
+      "type": "string",
+      "enum": ["application/pdf"],
+      "description": "MIME type of the document"
+    },
+    "status": {
+      "$ref": "enums.json#/definitions/ProcessingStatus"
+    },
+    "pipeline_stage": {
+      "$ref": "enums.json#/definitions/PipelineStage"
+    },
+    "page_count": {
+      "type": ["integer", "null"],
+      "minimum": 1,
+      "description": "Total number of pages in the document (null until text extraction)"
+    },
+    "is_scanned": {
+      "type": "boolean",
+      "default": false,
+      "description": "Whether the document was flagged as a scanned image PDF lacking text layer"
+    },
+    "error_message": {
+      "type": ["string", "null"],
+      "description": "Error details if processing failed"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 UTC creation timestamp"
+    },
+    "updated_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 UTC last updated timestamp"
+    }
+  },
+  "additionalProperties": false
+}

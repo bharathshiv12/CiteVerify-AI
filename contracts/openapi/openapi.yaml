@@ -1,0 +1,699 @@
+openapi: 3.1.0
+info:
+  title: CiteVerify AI API
+  version: 1.0.0
+  description: >
+    Canonical OpenAPI specification for CiteVerify AI - A Scientific Claim and Citation Verification System.
+    Built for INNOVEDGE 2026 Hackathon (Problem Statement 03).
+servers:
+  - url: http://localhost:8000
+    description: Local development backend
+
+paths:
+  /api/health:
+    get:
+      summary: Health and Liveness Check
+      description: Returns service status, version, and server timestamp.
+      operationId: getHealth
+      responses:
+        '200':
+          description: Service is healthy and responsive.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status, service, version, timestamp]
+                properties:
+                  status:
+                    type: string
+                    example: "ok"
+                  service:
+                    type: string
+                    example: "citeverify-backend"
+                  version:
+                    type: string
+                    example: "1.0.0"
+                  timestamp:
+                    type: string
+                    format: date-time
+                    example: "2026-11-19T10:00:00Z"
+
+  /api/documents/upload:
+    post:
+      summary: Upload Academic PDF
+      description: Validates and accepts a multipart/form-data academic PDF document.
+      operationId: uploadDocument
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: PDF file to verify (max 25MB)
+      responses:
+        '201':
+          description: Document successfully validated and uploaded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Document'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '413':
+          $ref: '#/components/responses/ErrorResponse'
+
+  /api/documents/{document_id}/analyze:
+    post:
+      summary: Start Pipeline Analysis
+      description: Starts the asynchronous verification pipeline via background worker.
+      operationId: analyzeDocument
+      parameters:
+        - name: document_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '202':
+          description: Analysis successfully queued.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [document_id, status, pipeline_stage, message]
+                properties:
+                  document_id:
+                    type: string
+                    format: uuid
+                  status:
+                    $ref: '#/components/schemas/ProcessingStatus'
+                    example: "PROCESSING"
+                  pipeline_stage:
+                    $ref: '#/components/schemas/PipelineStage'
+                    example: "TEXT_EXTRACTION"
+                  message:
+                    type: string
+                    example: "Document analysis pipeline started in background."
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
+        '409':
+          $ref: '#/components/responses/ErrorResponse'
+
+  /api/documents/{document_id}/status:
+    get:
+      summary: Get Analysis Status
+      description: Polls the processing status, active pipeline stage, and claim count progress.
+      operationId: getDocumentStatus
+      parameters:
+        - name: document_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Current status of the document analysis.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [document_id, status, pipeline_stage, progress_percent, total_claims_found, verified_claims_count]
+                properties:
+                  document_id:
+                    type: string
+                    format: uuid
+                  status:
+                    $ref: '#/components/schemas/ProcessingStatus'
+                  pipeline_stage:
+                    $ref: '#/components/schemas/PipelineStage'
+                  progress_percent:
+                    type: integer
+                    minimum: 0
+                    maximum: 100
+                    example: 45
+                  total_claims_found:
+                    type: integer
+                    minimum: 0
+                    example: 12
+                  verified_claims_count:
+                    type: integer
+                    minimum: 0
+                    example: 5
+                  error_message:
+                    type: string
+                    nullable: true
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
+
+  /api/documents/{document_id}/claims:
+    get:
+      summary: List Extracted Claims
+      description: Returns paginated claims for a document with optional filtering by verdict and review status.
+      operationId: getDocumentClaims
+      parameters:
+        - name: document_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: verdict
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/VerificationVerdict'
+        - name: needs_review
+          in: query
+          required: false
+          schema:
+            type: boolean
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+        - name: page_size
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 20
+            minimum: 1
+            maximum: 100
+      responses:
+        '200':
+          description: Paginated claim list envelope.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, page, page_size, total]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Claim'
+                  page:
+                    type: integer
+                    example: 1
+                  page_size:
+                    type: integer
+                    example: 20
+                  total:
+                    type: integer
+                    example: 12
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
+
+  /api/documents/{document_id}/report:
+    get:
+      summary: Get Final Verification Report
+      description: Returns the synthesized verification report. Returns 409 Conflict if analysis is not complete.
+      operationId: getDocumentReport
+      parameters:
+        - name: document_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Complete verification report.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VerificationReport'
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
+        '409':
+          $ref: '#/components/responses/ErrorResponse'
+
+  /api/claims/{claim_id}:
+    get:
+      summary: Get Single Claim Details
+      description: Returns a single claim with its citations, evidence passages, and verification rationale.
+      operationId: getClaimDetails
+      parameters:
+        - name: claim_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Claim details.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Claim'
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
+
+  /api/claims/{claim_id}/review:
+    post:
+      summary: Submit Human Review Decision
+      description: Submits a human expert review verdict, note, and reviewer name. Appends to verification history.
+      operationId: submitClaimReview
+      parameters:
+        - name: claim_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reviewer_name, updated_verdict, notes]
+              properties:
+                reviewer_name:
+                  type: string
+                  example: "Dr. A. Sharma"
+                updated_verdict:
+                  $ref: '#/components/schemas/VerificationVerdict'
+                notes:
+                  type: string
+                  example: "Abstract lacked clinical dosage specifics; confirmed in full paper table 3."
+      responses:
+        '200':
+          description: Updated claim following review.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Claim'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
+
+components:
+  responses:
+    ErrorResponse:
+      description: Standardized error envelope.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+
+  schemas:
+    VerificationVerdict:
+      type: string
+      enum:
+        - SUPPORTED
+        - PARTLY_SUPPORTED
+        - UNSUPPORTED
+        - CONTRADICTORY
+        - POTENTIALLY_OUTDATED
+
+    ProcessingStatus:
+      type: string
+      enum:
+        - PENDING
+        - PROCESSING
+        - COMPLETED
+        - FAILED
+
+    VerificationState:
+      type: string
+      enum:
+        - VERIFIED
+        - REQUIRES_HUMAN_REVIEW
+        - UNABLE_TO_VERIFY
+        - PENDING
+
+    EvidenceLevel:
+      type: string
+      enum:
+        - FULL_TEXT
+        - ABSTRACT_ONLY
+        - METADATA_ONLY
+        - NONE
+
+    RetrievalStatus:
+      type: string
+      enum:
+        - RETRIEVED
+        - NOT_FOUND
+        - PAYWALLED
+        - API_ERROR
+
+    PipelineStage:
+      type: string
+      enum:
+        - UPLOADED
+        - TEXT_EXTRACTION
+        - CLAIM_EXTRACTION
+        - CITATION_PARSING
+        - REFERENCE_PARSING
+        - CITATION_MATCHING
+        - PAPER_RETRIEVAL
+        - EVIDENCE_EXTRACTION
+        - VERIFICATION
+        - REPORT_GENERATION
+        - DONE
+
+    ErrorEnvelope:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message, details, request_id]
+          properties:
+            code:
+              type: string
+              example: "VALIDATION_ERROR"
+            message:
+              type: string
+              example: "The uploaded file is not a valid PDF."
+            details:
+              type: object
+              additionalProperties: true
+            request_id:
+              type: string
+              example: "550e8400-e29b-41d4-a716-446655440000"
+
+    Document:
+      type: object
+      required:
+        - id
+        - filename
+        - file_size_bytes
+        - mime_type
+        - status
+        - pipeline_stage
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        filename:
+          type: string
+        file_size_bytes:
+          type: integer
+        mime_type:
+          type: string
+          example: "application/pdf"
+        status:
+          $ref: '#/components/schemas/ProcessingStatus'
+        pipeline_stage:
+          $ref: '#/components/schemas/PipelineStage'
+        page_count:
+          type: integer
+          nullable: true
+        is_scanned:
+          type: boolean
+          default: false
+        error_message:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    Citation:
+      type: object
+      required:
+        - id
+        - document_id
+        - raw_marker
+        - marker_type
+        - page_number
+      properties:
+        id:
+          type: string
+          format: uuid
+        document_id:
+          type: string
+          format: uuid
+        raw_marker:
+          type: string
+          example: "[1]"
+        marker_type:
+          type: string
+          enum: [NUMERIC, AUTHOR_YEAR]
+          example: "NUMERIC"
+        page_number:
+          type: integer
+          minimum: 1
+        char_span:
+          type: array
+          items:
+            type: integer
+          minItems: 2
+          maxItems: 2
+          example: [120, 123]
+        reference_text:
+          type: string
+          nullable: true
+          example: "1. Vaswani, A. et al. Attention is all you need. NeurIPS, 2017."
+        reference_index:
+          type: integer
+          nullable: true
+          example: 1
+        matched_paper_id:
+          type: string
+          format: uuid
+          nullable: true
+
+    Evidence:
+      type: object
+      required:
+        - id
+        - source_provider
+        - passage
+        - evidence_level
+        - retrieval_status
+      properties:
+        id:
+          type: string
+          format: uuid
+        paper_id:
+          type: string
+          format: uuid
+          nullable: true
+        source_provider:
+          type: string
+          example: "crossref"
+        doi:
+          type: string
+          nullable: true
+          example: "10.1038/s41586-020-2649-2"
+        url:
+          type: string
+          nullable: true
+          example: "https://doi.org/10.1038/s41586-020-2649-2"
+        passage:
+          type: string
+          example: "Our experimental results show a 14% improvement in inference latency."
+        evidence_level:
+          $ref: '#/components/schemas/EvidenceLevel'
+        retrieval_status:
+          $ref: '#/components/schemas/RetrievalStatus'
+        similarity_score:
+          type: number
+          nullable: true
+          minimum: 0.0
+          maximum: 1.0
+          example: 0.88
+        section_name:
+          type: string
+          nullable: true
+          example: "Abstract"
+
+    Claim:
+      type: object
+      required:
+        - id
+        - document_id
+        - claim_text
+        - page_number
+        - char_span
+        - citations
+        - verification_state
+        - confidence
+        - rationale
+        - evidence
+        - needs_human_review
+        - review_reasons
+      properties:
+        id:
+          type: string
+          format: uuid
+        document_id:
+          type: string
+          format: uuid
+        claim_text:
+          type: string
+          example: "Transformers achieve superior translation quality while being more parallelizable."
+        page_number:
+          type: integer
+          minimum: 1
+          example: 1
+        char_span:
+          type: array
+          items:
+            type: integer
+          minItems: 2
+          maxItems: 2
+          example: [45, 120]
+        citations:
+          type: array
+          items:
+            $ref: '#/components/schemas/Citation'
+        verdict:
+          oneOf:
+            - $ref: '#/components/schemas/VerificationVerdict'
+            - type: "null"
+        verification_state:
+          $ref: '#/components/schemas/VerificationState'
+        confidence:
+          type: number
+          minimum: 0.0
+          maximum: 1.0
+          example: 0.94
+        rationale:
+          type: string
+          example: "The cited source empirical experiments explicitly validate that Transformer BLEU scores surpass RNN models."
+        evidence:
+          type: array
+          items:
+            $ref: '#/components/schemas/Evidence'
+        needs_human_review:
+          type: boolean
+          example: false
+        review_reasons:
+          type: array
+          items:
+            type: string
+          example: []
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    ResearchPaper:
+      type: object
+      required:
+        - id
+        - title
+        - provider
+        - retrieval_status
+        - match_confidence
+        - retrieved_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        doi:
+          type: string
+          nullable: true
+        title:
+          type: string
+        authors:
+          type: array
+          items:
+            type: string
+        year:
+          type: integer
+          nullable: true
+        venue:
+          type: string
+          nullable: true
+        abstract:
+          type: string
+          nullable: true
+        is_open_access:
+          type: boolean
+          default: false
+        open_access_url:
+          type: string
+          nullable: true
+        pdf_url:
+          type: string
+          nullable: true
+        provider:
+          type: string
+        retrieval_status:
+          $ref: '#/components/schemas/RetrievalStatus'
+        match_confidence:
+          type: number
+          minimum: 0.0
+          maximum: 1.0
+        match_reason:
+          type: string
+        retrieved_at:
+          type: string
+          format: date-time
+
+    VerificationReport:
+      type: object
+      required:
+        - document_id
+        - filename
+        - generated_at
+        - total_claims
+        - verdict_counts
+        - evidence_level_counts
+        - reliability_score
+        - human_review_required_count
+        - claims
+      properties:
+        document_id:
+          type: string
+          format: uuid
+        filename:
+          type: string
+        generated_at:
+          type: string
+          format: date-time
+        total_claims:
+          type: integer
+        reliability_score:
+          type: number
+          minimum: 0.0
+          maximum: 100.0
+        verdict_counts:
+          type: object
+          required: [SUPPORTED, PARTLY_SUPPORTED, UNSUPPORTED, CONTRADICTORY, POTENTIALLY_OUTDATED, UNVERIFIED]
+          properties:
+            SUPPORTED: { type: integer }
+            PARTLY_SUPPORTED: { type: integer }
+            UNSUPPORTED: { type: integer }
+            CONTRADICTORY: { type: integer }
+            POTENTIALLY_OUTDATED: { type: integer }
+            UNVERIFIED: { type: integer }
+        evidence_level_counts:
+          type: object
+          required: [FULL_TEXT, ABSTRACT_ONLY, METADATA_ONLY, NONE]
+          properties:
+            FULL_TEXT: { type: integer }
+            ABSTRACT_ONLY: { type: integer }
+            METADATA_ONLY: { type: integer }
+            NONE: { type: integer }
+        human_review_required_count:
+          type: integer
+        claims:
+          type: array
+          items:
+            $ref: '#/components/schemas/Claim'
