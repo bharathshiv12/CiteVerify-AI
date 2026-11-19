@@ -63,6 +63,7 @@ def create_app() -> FastAPI:
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins_list,
+        allow_origin_regex=r"^https://.*\.vercel\.app$",
         allow_credentials=True,
         allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
         allow_headers=["*"],
@@ -84,6 +85,9 @@ def create_app() -> FastAPI:
     app.include_router(dashboard_router, prefix="/api")
     app.include_router(settings_router, prefix="/api")
 
+    # 5. Route Registration at root for health check alias
+    app.include_router(health_router)
+
     @app.get("/", summary="Root index", tags=["System"])
     async def root_index():
         return {
@@ -93,6 +97,27 @@ def create_app() -> FastAPI:
             "docs": "/api/docs",
             "health": "/api/health",
         }
+
+    @app.get("/api", include_in_schema=False)
+    @app.get("/api/", include_in_schema=False)
+    async def api_root():
+        return {
+            "service": settings.PROJECT_NAME,
+            "version": settings.VERSION,
+            "status": "online",
+            "docs": "/api/docs",
+            "health": "/api/health",
+        }
+
+    @app.get("/docs", include_in_schema=False)
+    async def docs_redirect():
+        from fastapi.responses import RedirectResponse
+        return RedirectResponse(url="/api/docs")
+
+    @app.get("/openapi.json", include_in_schema=False)
+    async def openapi_redirect():
+        from fastapi.responses import RedirectResponse
+        return RedirectResponse(url="/api/openapi.json")
 
     return app
 

@@ -21,7 +21,11 @@ class Settings(BaseSettings):
     ENVIRONMENT: str = "development"
 
     # CORS settings
-    CORS_ORIGINS: Union[str, List[str]] = "http://localhost:3000"
+    CORS_ORIGINS: Union[str, List[str]] = (
+        "http://localhost:3000,"
+        "https://citeverifyfrontend.vercel.app,"
+        "https://citeverify-frontend.vercel.app"
+    )
     FRONTEND_URL: str = "http://localhost:3000"
 
     # Upload constraints
@@ -76,6 +80,15 @@ class Settings(BaseSettings):
 
         if self.FRONTEND_URL and self.FRONTEND_URL not in origins:
             origins.append(self.FRONTEND_URL)
+
+        # Ensure known production Vercel frontend domains are always permitted
+        for prod_domain in [
+            "https://citeverifyfrontend.vercel.app",
+            "https://citeverify-frontend.vercel.app",
+        ]:
+            if prod_domain not in origins:
+                origins.append(prod_domain)
+
         return origins if origins else ["http://localhost:3000"]
 
     @property
