@@ -1,97 +1,285 @@
 /**
- * Client-side API Service for CiteVerify AI.
- * Communicates with FastAPI backend using types defined in types/index.ts.
+ * CiteVerify AI — Canonical API Client
+ * Connects the frontend to FastAPI backend endpoints adhering strictly to OpenAPI 3.1.0 specifications.
  */
 
 import {
   Document,
   DocumentStatusResponse,
+  DocumentAnalyzeResponse,
   ClaimListResponse,
   Claim,
   VerificationReport,
+  ClaimReviewRequest,
+  ErrorEnvelope,
+  VerificationVerdict,
 } from "../types";
+import { getSupabaseClient } from "../lib/supabase/client";
 
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/+$/, "") || "http://localhost:8000";
-const USE_MOCKS = process.env.NEXT_PUBLIC_USE_MOCKS === "true";
+
+export const USE_MOCKS = process.env.NEXT_PUBLIC_USE_MOCKS === "true";
+
+export class ApiError extends Error {
+  code: string;
+  details?: Record<string, unknown>;
+  request_id?: string;
+  status: number;
+
+  constructor(message: string, status: number, code = "UNKNOWN_ERROR", details?: Record<string, unknown>, request_id?: string) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+    this.code = code;
+    this.details = details;
+    this.request_id = request_id;
+  }
+}
+
+async function getAuthHeader(): Promise<Record<string, string>> {
+  const supabase = getSupabaseClient();
+  if (supabase) {
+    try {
+      const { data } = await supabase.auth.getSession();
+      if (data.session?.access_token) {
+        return { Authorization: `Bearer ${data.session.access_token}` };
+      }
+    } catch {
+      // Supabase not reachable or anonymous
+    }
+  }
+  return {};
+}
+
+async function handleResponse<T>(res: Response): Promise<T> {
+  if (!res.ok) {
+    let errorEnvelope: ErrorEnvelope | null = null;
+    try {
+      errorEnvelope = await res.json();
+    } catch {
+      // Not JSON
+    }
+
+    const code = errorEnvelope?.error?.code || `HTTP_${res.status}`;
+    const message = errorEnvelope?.error?.message || `Request failed with status ${res.status}`;
+    const details = errorEnvelope?.error?.details;
+    const request_id = errorEnvelope?.error?.request_id;
+
+    throw new ApiError(message, res.status, code, details, request_id);
+  }
+  return res.json() as Promise<T>;
+}
 
 export async function checkHealth(): Promise<{ status: string; service: string; version: string; timestamp: string }> {
-  const res = await fetch(`${API_BASE_URL}/api/health`, {
-    headers: { Accept: "application/json" },
-    cache: "no-store",
-  });
-  if (!res.ok) {
-    throw new Error(`Health check failed with HTTP ${res.status}`);
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/health`, {
+      headers: { Accept: "application/json" },
+      cache: "no-store",
+    });
+    return handleResponse(res);
+  } catch (err: unknown) {
+    if (err instanceof ApiError) throw err;
+    throw new ApiError(
+      err instanceof Error ? err.message : "Network error contacting backend",
+      0,
+      "NETWORK_ERROR"
+    );
   }
-  return res.json();
 }
 
 export async function uploadDocument(file: File): Promise<Document> {
   if (USE_MOCKS) {
-    const mock = await import("../../contracts/examples/synthetic_document.json");
-    return mock.default as unknown as Document;
+    const mock = await import("../lib/fixtures/synthetic_document.json");
+    const synthetic = {
+      ...(mock.default as unknown as Document),
+      id: "00000000-0000-0000-0000-000000000001",
+      filename: file.name,
+      file_size_bytes: file.size,
+      status: "PENDING" as const,
+      pipeline_stage: "UPLOADED" as const,
+    };
+    return synthetic;
   }
 
+  const authHeader = await getAuthHeader();
   const formData = new FormData();
   formData.append("file", file);
 
   const res = await fetch(`${API_BASE_URL}/api/documents/upload`, {
     method: "POST",
+    headers: {
+      ...authHeader,
+    },
     body: formData,
   });
 
-  if (!res.ok) {
-    const errorData = await res.json().catch(() => ({}));
-    throw new Error(errorData?.error?.message || `Upload failed with HTTP ${res.status}`);
-  }
-  return res.json();
+  return handleResponse<Document>(res);
 }
 
-export async function startAnalysis(documentId: string): Promise<{ document_id: string; status: string }> {
+export async function startAnalysis(documentId: string): Promise<DocumentAnalyzeResponse> {
+  if (USE_MOCKS) {
+    return {
+      document_id: documentId,
+      status: "PROCESSING",
+      pipeline_stage: "TEXT_EXTRACTION",
+      message: "Document analysis pipeline started in mock mode.",
+    };
+  }
+
+  const authHeader = await getAuthHeader();
   const res = await fetch(`${API_BASE_URL}/api/documents/${documentId}/analyze`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      ...authHeader,
+    },
   });
-  if (!res.ok) {
-    throw new Error(`Failed to start analysis: HTTP ${res.status}`);
-  }
-  return res.json();
+
+  return handleResponse<DocumentAnalyzeResponse>(res);
 }
 
 export async function getDocumentStatus(documentId: string): Promise<DocumentStatusResponse> {
+  if (USE_MOCKS) {
+    return {
+      document_id: documentId,
+      status: "COMPLETED",
+      pipeline_stage: "DONE",
+      progress_percent: 100,
+      total_claims_found: 2,
+      verified_claims_count: 2,
+      error_message: null,
+    };
+  }
+
+  const authHeader = await getAuthHeader();
   const res = await fetch(`${API_BASE_URL}/api/documents/${documentId}/status`, {
-    headers: { Accept: "application/json" },
+    headers: {
+      Accept: "application/json",
+      ...authHeader,
+    },
     cache: "no-store",
   });
-  if (!res.ok) {
-    throw new Error(`Failed to fetch status: HTTP ${res.status}`);
-  }
-  return res.json();
+
+  return handleResponse<DocumentStatusResponse>(res);
 }
 
-export async function getDocumentClaims(documentId: string, page = 1, pageSize = 20): Promise<ClaimListResponse> {
+export interface GetClaimsParams {
+  verdict?: VerificationVerdict;
+  needs_review?: boolean;
+  page?: number;
+  page_size?: number;
+}
+
+export async function getDocumentClaims(
+  documentId: string,
+  params: GetClaimsParams = {}
+): Promise<ClaimListResponse> {
   if (USE_MOCKS) {
-    const mock = await import("../../contracts/examples/synthetic_claims.json");
-    return mock.default as unknown as ClaimListResponse;
+    const mock = await import("../lib/fixtures/synthetic_claims.json");
+    let items = (mock.default as unknown as ClaimListResponse).items;
+    if (params.verdict) {
+      items = items.filter((c) => c.verdict === params.verdict);
+    }
+    if (typeof params.needs_review === "boolean") {
+      items = items.filter((c) => c.needs_human_review === params.needs_review);
+    }
+    return {
+      items,
+      page: params.page || 1,
+      page_size: params.page_size || 20,
+      total: items.length,
+    };
   }
 
-  const res = await fetch(`${API_BASE_URL}/api/documents/${documentId}/claims?page=${page}&page_size=${pageSize}`);
-  if (!res.ok) {
-    throw new Error(`Failed to fetch claims: HTTP ${res.status}`);
-  }
-  return res.json();
+  const authHeader = await getAuthHeader();
+  const query = new URLSearchParams();
+  if (params.verdict) query.set("verdict", params.verdict);
+  if (typeof params.needs_review === "boolean") query.set("needs_review", String(params.needs_review));
+  if (params.page) query.set("page", String(params.page));
+  if (params.page_size) query.set("page_size", String(params.page_size));
+
+  const qs = query.toString();
+  const url = `${API_BASE_URL}/api/documents/${documentId}/claims${qs ? `?${qs}` : ""}`;
+
+  const res = await fetch(url, {
+    headers: {
+      Accept: "application/json",
+      ...authHeader,
+    },
+    cache: "no-store",
+  });
+
+  return handleResponse<ClaimListResponse>(res);
 }
 
 export async function getDocumentReport(documentId: string): Promise<VerificationReport> {
   if (USE_MOCKS) {
-    const mock = await import("../../contracts/examples/synthetic_report.json");
+    const mock = await import("../lib/fixtures/synthetic_report.json");
     return mock.default as unknown as VerificationReport;
   }
 
-  const res = await fetch(`${API_BASE_URL}/api/documents/${documentId}/report`);
-  if (!res.ok) {
-    throw new Error(`Failed to fetch report: HTTP ${res.status}`);
-  }
-  return res.json();
+  const authHeader = await getAuthHeader();
+  const res = await fetch(`${API_BASE_URL}/api/documents/${documentId}/report`, {
+    headers: {
+      Accept: "application/json",
+      ...authHeader,
+    },
+    cache: "no-store",
+  });
+
+  return handleResponse<VerificationReport>(res);
 }
 
+export async function getClaimDetails(claimId: string): Promise<Claim> {
+  if (USE_MOCKS) {
+    const mock = await import("../lib/fixtures/synthetic_claims.json");
+    const items = (mock.default as unknown as ClaimListResponse).items;
+    const found = items.find((c) => c.id === claimId);
+    if (!found) {
+      throw new ApiError("Claim not found in synthetic fixtures", 404, "NOT_FOUND");
+    }
+    return found;
+  }
+
+  const authHeader = await getAuthHeader();
+  const res = await fetch(`${API_BASE_URL}/api/claims/${claimId}`, {
+    headers: {
+      Accept: "application/json",
+      ...authHeader,
+    },
+    cache: "no-store",
+  });
+
+  return handleResponse<Claim>(res);
+}
+
+export async function submitClaimReview(
+  claimId: string,
+  review: ClaimReviewRequest
+): Promise<Claim> {
+  if (USE_MOCKS) {
+    const mock = await import("../lib/fixtures/synthetic_claims.json");
+    const items = (mock.default as unknown as ClaimListResponse).items;
+    const found = items.find((c) => c.id === claimId) || items[0];
+    return {
+      ...found,
+      verdict: review.updated_verdict,
+      needs_human_review: false,
+      rationale: `Human reviewer (${review.reviewer_name}) updated verdict: ${review.notes}`,
+    };
+  }
+
+  const authHeader = await getAuthHeader();
+  const res = await fetch(`${API_BASE_URL}/api/claims/${claimId}/review`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+      ...authHeader,
+    },
+    body: JSON.stringify(review),
+  });
+
+  return handleResponse<Claim>(res);
+}
