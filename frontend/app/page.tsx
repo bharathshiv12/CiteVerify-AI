@@ -95,19 +95,18 @@ export default function HomePage() {
           <Activity className="w-3.5 h-3.5 text-[#8D6E63]" />
           <span>Backend Status ({apiBaseUrl}):</span>
           <span
-            className={`font-mono px-2 py-0.5 rounded text-[11px] font-semibold ${
-              healthInfo.status === "online"
+            className={`font-mono px-2 py-0.5 rounded text-[11px] font-semibold ${healthInfo.status === "online"
                 ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300"
                 : healthInfo.status === "checking"
-                ? "bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300"
-                : "bg-stone-200 text-stone-700 dark:bg-stone-800 dark:text-stone-300"
-            }`}
+                  ? "bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300"
+                  : "bg-stone-200 text-stone-700 dark:bg-stone-800 dark:text-stone-300"
+              }`}
           >
             {healthInfo.status === "online"
               ? `Online (${healthInfo.service || "backend"} v${healthInfo.version || "1.0.0"})`
               : healthInfo.status === "checking"
-              ? "Checking..."
-              : "Offline / Standalone"}
+                ? "Checking..."
+                : "Offline / Standalone"}
           </span>
           {USE_MOCKS && (
             <span className="font-mono text-[10px] bg-[#F4B860] text-[#3E2F27] px-1.5 py-0.5 rounded font-bold uppercase">
