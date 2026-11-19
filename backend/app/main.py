@@ -15,7 +15,13 @@ from app.core.errors import (
     unhandled_exception_handler,
 )
 from app.core.middleware import RequestIdAndLoggingMiddleware
-from app.api.routes import health_router, auth_router, documents_router, claims_router
+from app.api.routes import (
+    health_router,
+    auth_router,
+    documents_router,
+    claims_router,
+    research_router,
+)
 
 
 def create_app() -> FastAPI:
@@ -52,6 +58,7 @@ def create_app() -> FastAPI:
     app.include_router(auth_router, prefix="/api")
     app.include_router(documents_router, prefix="/api")
     app.include_router(claims_router, prefix="/api")
+    app.include_router(research_router, prefix="/api")
 
     return app
 
