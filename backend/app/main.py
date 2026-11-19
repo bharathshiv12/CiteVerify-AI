@@ -84,6 +84,16 @@ def create_app() -> FastAPI:
     app.include_router(dashboard_router, prefix="/api")
     app.include_router(settings_router, prefix="/api")
 
+    @app.get("/", summary="Root index", tags=["System"])
+    async def root_index():
+        return {
+            "service": settings.PROJECT_NAME,
+            "version": settings.VERSION,
+            "status": "online",
+            "docs": "/api/docs",
+            "health": "/api/health",
+        }
+
     return app
 
 
