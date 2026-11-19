@@ -12,8 +12,9 @@
 | Phase | Description | Status | Commit SHA |
 |---|---|---|---|
 | **Phase 1** | Repository audit, frontend & contract analysis, API integration map | COMPLETED | `889d642` |
-| **Phase 2** | Backend skeleton, config, health, error handling, env, gitignore | COMPLETED | `76d4f91` (pending) |
-| **Phase 3** | Database migrations (Supabase DDL), repositories (interfaces + Supabase + in-memory), auth/JWT | IN PROGRESS | Pending |
+| **Phase 2** | Backend skeleton, config, health, error handling, env, gitignore | COMPLETED | `66bf08f` |
+| **Phase 3** | Database migrations (Supabase DDL), repositories (interfaces + Supabase + in-memory), auth/JWT | COMPLETED | `0331f82` (pending) |
+| **Phase 4** | Storage, upload, PDF extraction & scanned detection | IN PROGRESS | Pending |
 | **Phase 4** | Storage, upload, PDF extraction & scanned detection | NOT STARTED | - |
 | **Phase 5** | Claim extraction (heuristic) and citation parsing (numeric + author-year) | NOT STARTED | - |
 | **Phase 6** | Research clients (Crossref, OpenAlex, Europe PMC) & retrieval | NOT STARTED | - |
