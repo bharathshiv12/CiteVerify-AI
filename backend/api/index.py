@@ -37,6 +37,8 @@ class VercelPathRewriteMiddleware:
     async def __call__(self, scope, receive, send):
         if scope.get("type") in ("http", "websocket"):
             headers = dict(scope.get("headers", []))
+            scope["_debug_headers"] = {k.decode(errors="ignore"): v.decode(errors="ignore") for k, v in headers.items()}
+            scope["_debug_initial_path"] = scope.get("path", "")
 
             # Check for Vercel's pre-rewrite path headers
             matched_header = (
