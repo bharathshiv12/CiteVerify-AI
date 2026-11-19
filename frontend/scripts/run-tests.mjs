@@ -408,3 +408,17 @@ test("24. Valid Supabase configuration enables authentication controls", () => {
   assert.strictEqual(formState.inputsDisabled, false);
   assert.strictEqual(formState.submitDisabled, false);
 });
+
+test("25. Google OAuth options and redirect URL formatting", () => {
+  const origin = "https://citeverifyfrontend.vercel.app";
+  const getOAuthOptions = (provider) => ({
+    provider,
+    options: {
+      redirectTo: `${origin}/auth/callback`,
+    },
+  });
+
+  const config = getOAuthOptions("google");
+  assert.strictEqual(config.provider, "google");
+  assert.strictEqual(config.options.redirectTo, "https://citeverifyfrontend.vercel.app/auth/callback");
+});

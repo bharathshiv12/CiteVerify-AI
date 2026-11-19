@@ -25,6 +25,18 @@ export default function AuthCallbackPage() {
           const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
           const type = hashParams.get("type") || url.searchParams.get("type");
 
+          // Check if OAuth provider returned an error description
+          const oauthError =
+            url.searchParams.get("error_description") ||
+            hashParams.get("error_description") ||
+            url.searchParams.get("error") ||
+            hashParams.get("error");
+
+          if (oauthError) {
+            setErrorMsg(oauthError);
+            return;
+          }
+
           if (code) {
             const { error } = await supabase.auth.exchangeCodeForSession(code);
             if (error) {
@@ -32,7 +44,11 @@ export default function AuthCallbackPage() {
               return;
             }
           } else {
-            await supabase.auth.getSession();
+            const { error } = await supabase.auth.getSession();
+            if (error) {
+              setErrorMsg(error.message);
+              return;
+            }
           }
 
           if (type === "recovery" || next === "/reset-password") {
