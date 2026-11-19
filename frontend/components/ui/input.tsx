@@ -10,7 +10,8 @@ export interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> 
 
 export const Input = React.forwardRef<HTMLInputElement, InputProps>(
   ({ label, error, hint, leftIcon, rightIcon, className = "", id, ...props }, ref) => {
-    const inputId = id || (label ? label.toLowerCase().replace(/\s+/g, "-") : undefined);
+    const defaultId = React.useId();
+    const inputId = id || (label ? label.toLowerCase().replace(/[^a-z0-9]/gi, "-") : defaultId);
 
     return (
       <div className="w-full">
@@ -29,11 +30,10 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
           <input
             id={inputId}
             ref={ref}
-            className={`w-full h-[40px] px-3.5 text-sm rounded-[10px] bg-white dark:bg-[#2A221C] text-[#3E2F27] dark:text-[#F3E9DD] placeholder-[#7A685D]/60 dark:placeholder-[#B8A898]/40 border ${
-              error
+            className={`w-full h-[40px] px-3.5 text-sm rounded-[10px] bg-white dark:bg-[#2A221C] text-[#3E2F27] dark:text-[#F3E9DD] placeholder-[#7A685D]/60 dark:placeholder-[#B8A898]/40 border ${error
                 ? "border-red-500 focus:ring-2 focus:ring-red-400"
                 : "border-[#A08B78] dark:border-[#8C7A6A] focus:border-[#8D6E63] focus:ring-2 focus:ring-[#8D6E63]/20"
-            } ${leftIcon ? "pl-10" : ""} ${rightIcon ? "pr-10" : ""} focus:outline-none transition-colors ${className}`}
+              } ${leftIcon ? "pl-10" : ""} ${rightIcon ? "pr-10" : ""} disabled:opacity-60 disabled:cursor-not-allowed disabled:bg-[#F5EFE6] dark:disabled:bg-[#221B17] focus:outline-none transition-colors ${className}`}
             {...props}
           />
           {rightIcon && <div className="absolute right-3.5 text-[#7A685D] dark:text-[#B8A898]">{rightIcon}</div>}

@@ -45,7 +45,7 @@ export default function SettingsPage() {
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!isConfigured) {
-      setProfileMessage("Profile saved to local guest session.");
+      setProfileMessage("Authentication service is not configured.");
       return;
     }
 
@@ -137,7 +137,7 @@ export default function SettingsPage() {
 
               <Input
                 label="Academic Email"
-                value={user?.email || "guest.researcher@citeverify.local"}
+                value={user?.email || "Not authenticated"}
                 disabled
                 hint="Managed via authentication provider"
               />

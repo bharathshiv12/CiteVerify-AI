@@ -103,10 +103,10 @@ export function Sidebar({ isMobileOpen = false, onCloseMobile }: SidebarProps) {
             {!isCollapsed && (
               <div className="min-w-0">
                 <p className="text-xs font-bold text-[#3E2F27] dark:text-[#F3E9DD] truncate">
-                  {fullName || user?.email || "Academic Guest"}
+                  {fullName || user?.email || "Academic Reviewer"}
                 </p>
                 <p className="text-[10px] text-[#7A685D] dark:text-[#B8A898] truncate">
-                  {institution || (isConfigured ? "Researcher" : "Guest Mode")}
+                  {institution || (isConfigured ? "Verified Researcher" : "Unconfigured")}
                 </p>
               </div>
             )}

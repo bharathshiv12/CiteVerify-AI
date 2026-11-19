@@ -152,3 +152,22 @@ export interface VerificationReport {
   claims: Claim[];
 }
 
+export interface PaginatedDocuments {
+  items: Document[];
+  page: number;
+  page_size: number;
+  total: number;
+}
+
+export interface DashboardStats {
+  total_documents: number;
+  total_claims: number;
+  supported_claims: number;
+  partly_supported_claims: number;
+  unsupported_claims: number;
+  contradictory_claims: number;
+  outdated_claims: number;
+  needs_review_claims: number;
+  average_reliability_score: number;
+}
+

@@ -13,11 +13,15 @@ import {
   ClaimReviewRequest,
   ErrorEnvelope,
   VerificationVerdict,
+  PaginatedDocuments,
+  DashboardStats,
 } from "../types";
 import { getSupabaseClient } from "../lib/supabase/client";
 
 const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/+$/, "") || "http://localhost:8000";
+  process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/+$/, "") ||
+  process.env.NEXT_PUBLIC_API_URL?.replace(/\/+$/, "") ||
+  "http://localhost:8000";
 
 export const USE_MOCKS = process.env.NEXT_PUBLIC_USE_MOCKS === "true";
 
@@ -65,6 +69,23 @@ async function handleResponse<T>(res: Response): Promise<T> {
     const message = errorEnvelope?.error?.message || `Request failed with status ${res.status}`;
     const details = errorEnvelope?.error?.details;
     const request_id = errorEnvelope?.error?.request_id;
+
+    if (res.status === 401 && typeof window !== "undefined") {
+      const isAuthPage =
+        window.location.pathname.startsWith("/login") ||
+        window.location.pathname.startsWith("/signup") ||
+        window.location.pathname.startsWith("/auth");
+      if (!isAuthPage) {
+        const supabase = getSupabaseClient();
+        if (supabase) {
+          supabase.auth.getSession().then(({ data }) => {
+            if (!data.session) {
+              window.location.href = "/login?expired=true";
+            }
+          });
+        }
+      }
+    }
 
     throw new ApiError(message, res.status, code, details, request_id);
   }
@@ -282,4 +303,84 @@ export async function submitClaimReview(
   });
 
   return handleResponse<Claim>(res);
+}
+
+export async function listDocuments(page = 1, pageSize = 50): Promise<PaginatedDocuments> {
+  if (USE_MOCKS) {
+    return {
+      items: [],
+      page: 1,
+      page_size: pageSize,
+      total: 0,
+    };
+  }
+
+  const authHeader = await getAuthHeader();
+  const res = await fetch(`${API_BASE_URL}/api/documents?page=${page}&page_size=${pageSize}`, {
+    headers: {
+      Accept: "application/json",
+      ...authHeader,
+    },
+    cache: "no-store",
+  });
+
+  return handleResponse<PaginatedDocuments>(res);
+}
+
+export async function deleteDocument(documentId: string): Promise<void> {
+  if (USE_MOCKS) return;
+
+  const authHeader = await getAuthHeader();
+  const res = await fetch(`${API_BASE_URL}/api/documents/${documentId}`, {
+    method: "DELETE",
+    headers: {
+      ...authHeader,
+    },
+  });
+
+  if (!res.ok && res.status !== 204) {
+    throw new ApiError("Failed to delete document", res.status, "DELETE_ERROR");
+  }
+}
+
+export async function downloadReportPdf(documentId: string): Promise<Blob> {
+  const authHeader = await getAuthHeader();
+  const res = await fetch(`${API_BASE_URL}/api/documents/${documentId}/report/pdf`, {
+    headers: {
+      ...authHeader,
+    },
+  });
+
+  if (!res.ok) {
+    throw new ApiError("Failed to download PDF report", res.status, "DOWNLOAD_ERROR");
+  }
+
+  return res.blob();
+}
+
+export async function getDashboardStats(): Promise<DashboardStats> {
+  if (USE_MOCKS) {
+    return {
+      total_documents: 1,
+      total_claims: 2,
+      supported_claims: 1,
+      partly_supported_claims: 0,
+      unsupported_claims: 0,
+      contradictory_claims: 0,
+      outdated_claims: 0,
+      needs_review_claims: 1,
+      average_reliability_score: 75.0,
+    };
+  }
+
+  const authHeader = await getAuthHeader();
+  const res = await fetch(`${API_BASE_URL}/api/dashboard/stats`, {
+    headers: {
+      Accept: "application/json",
+      ...authHeader,
+    },
+    cache: "no-store",
+  });
+
+  return handleResponse<DashboardStats>(res);
 }

@@ -1,6 +1,7 @@
 """
 Main FastAPI application entry point for CiteVerify AI backend.
 """
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.exceptions import RequestValidationError
@@ -15,7 +16,33 @@ from app.core.errors import (
     unhandled_exception_handler,
 )
 from app.core.middleware import RequestIdAndLoggingMiddleware
-from app.api.routes import health_router, documents_router, claims_router
+from app.api.routes import (
+    health_router,
+    auth_router,
+    documents_router,
+    claims_router,
+    research_router,
+    dashboard_router,
+    settings_router,
+)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup validation without exposing secrets
+    backend = getattr(settings, "REPOSITORY_BACKEND", "memory").lower()
+    if settings.ENVIRONMENT == "production":
+        if backend != "supabase":
+            raise RuntimeError(
+                "CRITICAL: In-memory persistence is strictly forbidden in production. "
+                "Set REPOSITORY_BACKEND=supabase in environment variables."
+            )
+        if not settings.is_supabase_configured:
+            raise RuntimeError(
+                "CRITICAL: Supabase credentials are missing while REPOSITORY_BACKEND=supabase in production. "
+                "Set SUPABASE_URL and SUPABASE_SECRET_KEY."
+            )
+    yield
 
 
 def create_app() -> FastAPI:
@@ -26,6 +53,7 @@ def create_app() -> FastAPI:
         openapi_url="/api/openapi.json",
         docs_url="/api/docs",
         redoc_url="/api/redoc",
+        lifespan=lifespan,
     )
 
     # 1. Request ID and Access Logging Middleware
@@ -49,8 +77,12 @@ def create_app() -> FastAPI:
 
     # 4. Route Registration under /api prefix
     app.include_router(health_router, prefix="/api")
+    app.include_router(auth_router, prefix="/api")
     app.include_router(documents_router, prefix="/api")
     app.include_router(claims_router, prefix="/api")
+    app.include_router(research_router, prefix="/api")
+    app.include_router(dashboard_router, prefix="/api")
+    app.include_router(settings_router, prefix="/api")
 
     return app
 
