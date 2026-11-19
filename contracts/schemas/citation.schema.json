@@ -1,0 +1,61 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://citeverify.ai/schemas/citation.schema.json",
+  "title": "Citation",
+  "description": "Represents an in-text citation marker and its parsed bibliographic reference.",
+  "type": "object",
+  "required": [
+    "id",
+    "document_id",
+    "raw_marker",
+    "marker_type",
+    "page_number"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique UUID of the citation marker"
+    },
+    "document_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "UUID of the containing document"
+    },
+    "raw_marker": {
+      "type": "string",
+      "description": "Original in-text citation string as parsed (e.g., '[1]', 'Smith et al., 2020')"
+    },
+    "marker_type": {
+      "type": "string",
+      "enum": ["NUMERIC", "AUTHOR_YEAR"],
+      "description": "Classification of the in-text citation format"
+    },
+    "page_number": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Page on which the citation appears"
+    },
+    "char_span": {
+      "type": "array",
+      "items": { "type": "integer" },
+      "minItems": 2,
+      "maxItems": 2,
+      "description": "[start, end] character indices of the citation marker in page text"
+    },
+    "reference_text": {
+      "type": ["string", "null"],
+      "description": "Full bibliographic text from the References section linked to this marker"
+    },
+    "reference_index": {
+      "type": ["integer", "null"],
+      "description": "1-based bibliography entry number if numeric"
+    },
+    "matched_paper_id": {
+      "type": ["string", "null"],
+      "format": "uuid",
+      "description": "UUID of the resolved ResearchPaper record"
+    }
+  },
+  "additionalProperties": false
+}

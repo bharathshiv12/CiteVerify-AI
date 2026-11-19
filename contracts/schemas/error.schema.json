@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://citeverify.ai/schemas/error.schema.json",
+  "title": "ErrorEnvelope",
+  "description": "Standard error response envelope returned by all CiteVerify endpoints.",
+  "type": "object",
+  "required": ["error"],
+  "properties": {
+    "error": {
+      "type": "object",
+      "required": ["code", "message", "details", "request_id"],
+      "properties": {
+        "code": {
+          "type": "string",
+          "description": "Machine-readable error code (e.g. INVALID_PDF, NOT_FOUND, VALIDATION_ERROR)"
+        },
+        "message": {
+          "type": "string",
+          "description": "Human-readable description of the error"
+        },
+        "details": {
+          "type": "object",
+          "description": "Structured metadata or field validation details",
+          "additionalProperties": true
+        },
+        "request_id": {
+          "type": "string",
+          "description": "Unique UUID identifying the request for tracing and debugging"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

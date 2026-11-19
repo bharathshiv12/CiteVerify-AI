@@ -1,0 +1,83 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://citeverify.ai/schemas/research_paper.schema.json",
+  "title": "ResearchPaper",
+  "description": "Scholarly publication retrieved from public scholarly APIs (Crossref, OpenAlex, Europe PMC).",
+  "type": "object",
+  "required": [
+    "id",
+    "title",
+    "provider",
+    "retrieval_status",
+    "match_confidence",
+    "retrieved_at"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Internal UUID for the retrieved research paper"
+    },
+    "doi": {
+      "type": ["string", "null"],
+      "description": "Normalized Digital Object Identifier (e.g. 10.1038/s41586-020-2649-2)"
+    },
+    "title": {
+      "type": "string",
+      "description": "Publication title"
+    },
+    "authors": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "List of author names"
+    },
+    "year": {
+      "type": ["integer", "null"],
+      "description": "Year of publication"
+    },
+    "venue": {
+      "type": ["string", "null"],
+      "description": "Journal, conference, or publisher name"
+    },
+    "abstract": {
+      "type": ["string", "null"],
+      "description": "Abstract text retrieved from scholarly API"
+    },
+    "is_open_access": {
+      "type": "boolean",
+      "default": false,
+      "description": "Whether the paper has legitimate open-access licensing"
+    },
+    "open_access_url": {
+      "type": ["string", "null"],
+      "description": "Direct URL to open-access landing page or repository"
+    },
+    "pdf_url": {
+      "type": ["string", "null"],
+      "description": "Direct URL to open-access PDF if verified"
+    },
+    "provider": {
+      "type": "string",
+      "description": "Source public API provider (e.g., crossref, openalex, europe_pmc)"
+    },
+    "retrieval_status": {
+      "$ref": "enums.json#/definitions/RetrievalStatus"
+    },
+    "match_confidence": {
+      "type": "number",
+      "minimum": 0.0,
+      "maximum": 1.0,
+      "description": "Similarity score between parsed citation and retrieved metadata"
+    },
+    "match_reason": {
+      "type": "string",
+      "description": "Explanation of how match was established (e.g. 'Exact DOI match', 'High title fuzzy similarity')"
+    },
+    "retrieved_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 UTC timestamp of retrieval"
+    }
+  },
+  "additionalProperties": false
+}

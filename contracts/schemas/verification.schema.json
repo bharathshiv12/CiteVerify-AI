@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://citeverify.ai/schemas/verification.schema.json",
+  "title": "Verification",
+  "description": "Evaluation outcome comparing a factual claim against retrieved evidence passages.",
+  "type": "object",
+  "required": [
+    "id",
+    "verification_state",
+    "confidence",
+    "rationale",
+    "needs_human_review",
+    "review_reasons",
+    "evaluated_at"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique UUID of the verification result"
+    },
+    "verdict": {
+      "oneOf": [
+        { "$ref": "enums.json#/definitions/VerificationVerdict" },
+        { "type": "null" }
+      ],
+      "description": "Verification verdict. Null if evidence is insufficient or retrieval failed."
+    },
+    "verification_state": {
+      "$ref": "enums.json#/definitions/VerificationState"
+    },
+    "confidence": {
+      "type": "number",
+      "minimum": 0.0,
+      "maximum": 1.0,
+      "description": "Confidence score of the verification verdict"
+    },
+    "rationale": {
+      "type": "string",
+      "description": "Transparent reasoning explaining how evidence supports or contradicts the claim"
+    },
+    "evidence_summary": {
+      "type": ["string", "null"],
+      "description": "Synthesized brief summary of key evidence points"
+    },
+    "needs_human_review": {
+      "type": "boolean",
+      "default": false,
+      "description": "Flag indicating that human expert review is required"
+    },
+    "review_reasons": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "List of explicit reasons triggering human review"
+    },
+    "evaluated_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 UTC timestamp when verification was executed"
+    }
+  },
+  "additionalProperties": false
+}

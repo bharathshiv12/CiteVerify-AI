@@ -1,0 +1,24 @@
+# Codeowners file for CiteVerify AI
+# Specifies branch protections and required review assignments per directory
+
+# Global fallback: Integration Lead
+* @TODO_INTEGRATION_LEAD
+
+# Agent 1 (Frontend Architect)
+/frontend/ @TODO_AGENT_1_FRONTEND
+
+# Agent 2 (Backend Architect & DevOps)
+/backend/ @TODO_AGENT_2_BACKEND
+/scripts/ @TODO_AGENT_2_BACKEND
+/.github/workflows/ @TODO_AGENT_2_BACKEND
+
+# Agent 3 (AI/ML Engineer)
+/ai_engine/ @TODO_AGENT_3_AIML
+
+# Agent 4 (Research Integration Engineer)
+/research_services/ @TODO_AGENT_4_RESEARCH
+/tests/integration/ @TODO_AGENT_4_RESEARCH
+
+# Shared Canonical Contracts - Requires 4-Role Consensus
+/contracts/ @TODO_AGENT_1_FRONTEND @TODO_AGENT_2_BACKEND @TODO_AGENT_3_AIML @TODO_AGENT_4_RESEARCH
+

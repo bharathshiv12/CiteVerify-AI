@@ -1,0 +1,15 @@
+{
+  "_synthetic": true,
+  "description": "SAMPLE SYNTHETIC DATA FOR ISOLATED TESTING ONLY. DO NOT USE IN PRODUCTION OR BENCHMARKS.",
+  "id": "00000000-0000-0000-0000-000000000001",
+  "filename": "synthetic_sample_paper_v1.pdf",
+  "file_size_bytes": 1048576,
+  "mime_type": "application/pdf",
+  "status": "COMPLETED",
+  "pipeline_stage": "DONE",
+  "page_count": 6,
+  "is_scanned": false,
+  "error_message": null,
+  "created_at": "2026-11-19T08:00:00Z",
+  "updated_at": "2026-11-19T08:02:30Z"
+}

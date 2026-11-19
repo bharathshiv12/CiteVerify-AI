@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://citeverify.ai/schemas/evidence.schema.json",
+  "title": "Evidence",
+  "description": "Specific text passage or metadata extracted from a cited source to verify a claim.",
+  "type": "object",
+  "required": [
+    "id",
+    "source_provider",
+    "passage",
+    "evidence_level",
+    "retrieval_status"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique UUID of the evidence item"
+    },
+    "paper_id": {
+      "type": ["string", "null"],
+      "format": "uuid",
+      "description": "Foreign key to the source ResearchPaper"
+    },
+    "source_provider": {
+      "type": "string",
+      "description": "Scholarly provider name (e.g. crossref, openalex, europe_pmc)"
+    },
+    "doi": {
+      "type": ["string", "null"],
+      "description": "DOI of the source publication"
+    },
+    "url": {
+      "type": ["string", "null"],
+      "description": "Accessible web URL to source paper or repository"
+    },
+    "passage": {
+      "type": "string",
+      "description": "Exact excerpt from the abstract or full-text used for verification"
+    },
+    "evidence_level": {
+      "$ref": "enums.json#/definitions/EvidenceLevel"
+    },
+    "retrieval_status": {
+      "$ref": "enums.json#/definitions/RetrievalStatus"
+    },
+    "similarity_score": {
+      "type": ["number", "null"],
+      "minimum": 0.0,
+      "maximum": 1.0,
+      "description": "Semantic similarity score between the claim and this passage"
+    },
+    "section_name": {
+      "type": ["string", "null"],
+      "description": "Section where passage was found (e.g. 'Abstract', 'Methods', 'Results')"
+    }
+  },
+  "additionalProperties": false
+}

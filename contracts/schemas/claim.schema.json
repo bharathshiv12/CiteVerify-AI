@@ -1,0 +1,98 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://citeverify.ai/schemas/claim.schema.json",
+  "title": "Claim",
+  "description": "Factual statement extracted from the uploaded academic paper with attached citations, evidence, and verification.",
+  "type": "object",
+  "required": [
+    "id",
+    "document_id",
+    "claim_text",
+    "page_number",
+    "char_span",
+    "citations",
+    "verification_state",
+    "confidence",
+    "rationale",
+    "evidence",
+    "needs_human_review",
+    "review_reasons"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique UUID of the claim"
+    },
+    "document_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "UUID of the document from which claim was extracted"
+    },
+    "claim_text": {
+      "type": "string",
+      "description": "Exact text of the factual claim"
+    },
+    "page_number": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Page number where the claim appears"
+    },
+    "char_span": {
+      "type": "array",
+      "items": { "type": "integer" },
+      "minItems": 2,
+      "maxItems": 2,
+      "description": "[start, end] character offsets in the page text"
+    },
+    "citations": {
+      "type": "array",
+      "items": { "$ref": "citation.schema.json" },
+      "description": "Citations directly attached to or asserting this claim"
+    },
+    "verdict": {
+      "oneOf": [
+        { "$ref": "enums.json#/definitions/VerificationVerdict" },
+        { "type": "null" }
+      ],
+      "description": "Final verification verdict (null if insufficient evidence or retrieval failed)"
+    },
+    "verification_state": {
+      "$ref": "enums.json#/definitions/VerificationState"
+    },
+    "confidence": {
+      "type": "number",
+      "minimum": 0.0,
+      "maximum": 1.0,
+      "description": "Confidence score of the verification verdict (0.0 to 1.0)"
+    },
+    "rationale": {
+      "type": "string",
+      "description": "Detailed justification connecting claim to evidence"
+    },
+    "evidence": {
+      "type": "array",
+      "items": { "$ref": "evidence.schema.json" },
+      "description": "List of evidence items retrieved and compared against this claim"
+    },
+    "needs_human_review": {
+      "type": "boolean",
+      "default": false,
+      "description": "Flag indicating that human intervention is necessary"
+    },
+    "review_reasons": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Explicit trigger reasons for human review"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "updated_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "additionalProperties": false
+}
