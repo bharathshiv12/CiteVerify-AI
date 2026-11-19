@@ -153,13 +153,20 @@ async def http_exception_handler(request: Request, exc: StarletteHTTPException) 
         503: "SERVICE_UNAVAILABLE",
     }
     code = code_map.get(exc.status_code, "HTTP_ERROR")
+    details = exc.detail if isinstance(exc.detail, dict) else {}
+    if exc.status_code == 404:
+        details = {
+            **details,
+            "path": request.url.path,
+            "scope_path": request.scope.get("path", ""),
+        }
     return JSONResponse(
         status_code=exc.status_code,
         content={
             "error": {
                 "code": code,
                 "message": exc.detail if isinstance(exc.detail, str) else str(exc.detail),
-                "details": exc.detail if isinstance(exc.detail, dict) else {},
+                "details": details,
                 "request_id": request_id,
             }
         },

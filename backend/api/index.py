@@ -66,9 +66,11 @@ class VercelPathRewriteMiddleware:
                 if not orig_path.startswith("/"):
                     orig_path = "/" + orig_path
 
-                # Normalize /api/index (and /api/index/) to root /
-                if orig_path == "/api/index" or orig_path == "/api/index/":
+                # Normalize /api/index.py or /api/index to root /
+                if orig_path in ("/api/index", "/api/index/", "/api/index.py", "/api/index.py/"):
                     resolved_path = "/"
+                elif orig_path.startswith("/api/index.py/"):
+                    resolved_path = orig_path[len("/api/index.py"):]
                 elif orig_path.startswith("/api/index/"):
                     resolved_path = orig_path[len("/api/index"):]
                 else:
@@ -79,8 +81,10 @@ class VercelPathRewriteMiddleware:
                     scope["raw_path"] = resolved_path.encode("latin-1")
             else:
                 # Fallback when no header is present
-                if current_path == "/api/index" or current_path == "/api/index/":
+                if current_path in ("/api/index", "/api/index/", "/api/index.py", "/api/index.py/"):
                     scope["path"] = "/"
+                elif current_path.startswith("/api/index.py/"):
+                    scope["path"] = current_path[len("/api/index.py"):]
                 elif current_path.startswith("/api/index/"):
                     scope["path"] = current_path[len("/api/index"):]
                 if "raw_path" in scope:
