@@ -16,6 +16,7 @@ from app.database.repository import AbstractRepository, get_repository
 from app.storage.file_storage import get_file_storage
 from app.processors.upload_validator import validate_pdf_content
 from app.services.document_processor import extract_text_from_pdf, PDFProcessingError
+from app.services.pipeline_orchestrator import run_pipeline
 from app.schemas.document import (
     Document,
     DocumentStatusResponse,
@@ -28,20 +29,6 @@ from app.schemas.common import PaginatedResponse
 from app.schemas.user import User
 
 router = APIRouter(prefix="/documents", tags=["Documents"])
-
-
-async def dummy_pipeline_runner(document_id: UUID, repo: AbstractRepository):
-    """
-    Background worker stub for orchestrating pipeline stages.
-    Will be wired to full pipeline orchestrator in Phase 8.
-    """
-    doc = await repo.get_document(document_id)
-    if not doc:
-        return
-    doc.status = ProcessingStatus.PROCESSING
-    doc.pipeline_stage = PipelineStage.TEXT_EXTRACTION
-    doc.updated_at = datetime.now(timezone.utc)
-    await repo.update_document(doc)
 
 
 @router.post("/upload", status_code=status.HTTP_201_CREATED, response_model=Document)
@@ -213,7 +200,7 @@ async def analyze_document(
     if doc.status == ProcessingStatus.PROCESSING:
         raise ConflictError(message="Document is already actively being processed.")
 
-    background_tasks.add_task(dummy_pipeline_runner, document_id, repo)
+    background_tasks.add_task(run_pipeline, document_id, repo)
 
     return DocumentAnalyzeResponse(
         document_id=doc.id,
