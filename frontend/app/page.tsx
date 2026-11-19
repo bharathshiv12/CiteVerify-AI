@@ -25,7 +25,10 @@ export default function HomePage() {
     version?: string;
   }>({ status: "checking" });
 
-  const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
+  const apiBaseUrl =
+    process.env.NEXT_PUBLIC_API_URL?.replace(/\/+$/, "") ||
+    process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/+$/, "") ||
+    "http://localhost:8000";
 
   useEffect(() => {
     checkHealth()
