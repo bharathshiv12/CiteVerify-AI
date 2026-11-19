@@ -2,7 +2,7 @@
 Main FastAPI application entry point for CiteVerify AI backend.
 """
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
@@ -89,18 +89,13 @@ def create_app() -> FastAPI:
     app.include_router(health_router)
 
     @app.get("/", summary="Root index", tags=["System"])
-    async def root_index(request: Request):
+    async def root_index():
         return {
             "service": settings.PROJECT_NAME,
             "version": settings.VERSION,
             "status": "online",
             "docs": "/api/docs",
             "health": "/api/health",
-            "debug": {
-                "initial_path": request.scope.get("_debug_initial_path"),
-                "current_path": request.scope.get("path"),
-                "headers": request.scope.get("_debug_headers", {}),
-            },
         }
 
     @app.get("/api", include_in_schema=False)

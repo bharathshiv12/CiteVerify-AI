@@ -19,13 +19,10 @@ class VercelPathRewriteMiddleware:
     """
     ASGI middleware for Vercel Python Serverless Runtime.
 
-    When Vercel processes rewrites (e.g. {"source": "/(.*)", "destination": "/api/index"}),
-    the ASGI scope['path'] is passed as '/api/index'.
-    Vercel conveys the client's actual requested URL path in headers such as
-    'x-matched-path', 'x-vercel-matched-path', or 'x-forwarded-uri'.
-
-    This middleware detects the client's original path and restores scope['path']
-    so FastAPI routers match routes (/health, /api/health, /api/documents, etc.) accurately.
+    When Vercel processes rewrites to /api/index.py/$1:
+    The ASGI scope['path'] arrives with prefix '/api/index.py' (or '/api/index').
+    This middleware strips the entrypoint prefix so FastAPI routers match
+    the intended target routes (/health, /api/health, /api/documents, etc.) accurately.
     """
 
     def __init__(self, inner_app):
@@ -36,61 +33,16 @@ class VercelPathRewriteMiddleware:
 
     async def __call__(self, scope, receive, send):
         if scope.get("type") in ("http", "websocket"):
-            headers = dict(scope.get("headers", []))
-            scope["_debug_headers"] = {k.decode(errors="ignore"): v.decode(errors="ignore") for k, v in headers.items()}
-            scope["_debug_initial_path"] = scope.get("path", "")
-
-            # Check for Vercel's pre-rewrite path headers
-            matched_header = (
-                headers.get(b"x-matched-path")
-                or headers.get(b"x-vercel-matched-path")
-                or headers.get(b"x-forwarded-uri")
-                or headers.get(b"x-original-url")
-                or headers.get(b"x-rewrite-url")
-            )
-
-            orig_path = ""
-            if matched_header:
-                matched_str = matched_header.decode("utf-8", errors="ignore")
-                # Split path from query string if present
-                if "?" in matched_str:
-                    path_part, query_part = matched_str.split("?", 1)
-                    if not scope.get("query_string") and query_part:
-                        scope["query_string"] = query_part.encode("latin-1")
-                else:
-                    path_part = matched_str
-
-                orig_path = path_part.strip()
-
-            current_path = scope.get("path", "")
-
-            if orig_path:
-                if not orig_path.startswith("/"):
-                    orig_path = "/" + orig_path
-
-                # Normalize /api/index.py or /api/index to root /
-                if orig_path in ("/api/index", "/api/index/", "/api/index.py", "/api/index.py/"):
-                    resolved_path = "/"
-                elif orig_path.startswith("/api/index.py/"):
-                    resolved_path = orig_path[len("/api/index.py"):]
-                elif orig_path.startswith("/api/index/"):
-                    resolved_path = orig_path[len("/api/index"):]
-                else:
-                    resolved_path = urllib.parse.unquote(orig_path)
-
-                scope["path"] = resolved_path
-                if "raw_path" in scope:
-                    scope["raw_path"] = resolved_path.encode("latin-1")
-            else:
-                # Fallback when no header is present
-                if current_path in ("/api/index", "/api/index/", "/api/index.py", "/api/index.py/"):
+            path = scope.get("path", "")
+            for prefix in ("/api/index.py", "/api/index"):
+                if path == prefix or path == prefix + "/":
                     scope["path"] = "/"
-                elif current_path.startswith("/api/index.py/"):
-                    scope["path"] = current_path[len("/api/index.py"):]
-                elif current_path.startswith("/api/index/"):
-                    scope["path"] = current_path[len("/api/index"):]
-                if "raw_path" in scope:
-                    scope["raw_path"] = scope["path"].encode("latin-1")
+                    break
+                elif path.startswith(prefix + "/"):
+                    scope["path"] = path[len(prefix):]
+                    break
+            if "raw_path" in scope:
+                scope["raw_path"] = scope["path"].encode("latin-1")
 
         await self.inner_app(scope, receive, send)
 
