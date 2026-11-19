@@ -7,7 +7,8 @@ from typing import Optional, List
 from uuid import UUID
 
 from fastapi import APIRouter, UploadFile, File, BackgroundTasks, status, Query, Depends, Response
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
+import io
 
 from app.core.config import settings
 from app.core.errors import NotFoundError, ConflictError
@@ -17,6 +18,7 @@ from app.storage.file_storage import get_file_storage
 from app.processors.upload_validator import validate_pdf_content
 from app.services.document_processor import extract_text_from_pdf, PDFProcessingError
 from app.services.pipeline_orchestrator import run_pipeline
+from app.services.report_generator import generate_pdf_report
 from app.schemas.document import (
     Document,
     DocumentStatusResponse,
@@ -329,3 +331,42 @@ async def get_document_report(
         human_review_required_count=sum(1 for c in claims if c.needs_human_review),
         claims=claims,
     )
+
+
+@router.get("/{document_id}/report/pdf", summary="Export verification report as PDF")
+async def export_document_report_pdf(
+    document_id: UUID,
+    repo: AbstractRepository = Depends(get_repository),
+):
+    """
+    Exports verification report as a publication-ready PDF document (Resolves Gap 7).
+    """
+    doc = await repo.get_document(document_id)
+    if not doc:
+        raise NotFoundError(resource="Document", identifier=str(document_id))
+
+    if doc.status != ProcessingStatus.COMPLETED:
+        raise ConflictError(
+            message=f"Document analysis is not completed yet (current status: {doc.status.value}).",
+            details={"document_id": str(document_id), "status": doc.status.value},
+        )
+
+    report = await repo.get_report_by_document(document_id)
+    if not report:
+        # Fallback generate from stored claims
+        claims, _ = await repo.get_claims_by_document(document_id, page=1, page_size=1000)
+        from app.services.report_generator import generate_verification_report
+        report = generate_verification_report(doc, claims)
+
+    pdf_bytes = generate_pdf_report(report)
+    filename = f"citeverify_report_{doc.id}.pdf"
+
+    return StreamingResponse(
+        io.BytesIO(pdf_bytes),
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Content-Length": str(len(pdf_bytes)),
+        },
+    )
+

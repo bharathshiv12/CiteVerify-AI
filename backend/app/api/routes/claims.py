@@ -5,7 +5,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends
 from app.core.errors import NotFoundError
 from app.database.repository import AbstractRepository, get_repository
-from app.schemas.claim import Claim
+from app.schemas.claim import Claim, ClaimPatchRequest
 from app.schemas.verification import ClaimReviewRequest
 
 router = APIRouter(prefix="/claims", tags=["Claims"])
@@ -45,4 +45,28 @@ async def review_claim(
         notes=review_req.notes,
     )
     return updated
+
+
+@router.patch("/{claim_id}", response_model=Claim, summary="Patch claim text and span")
+async def patch_claim(
+    claim_id: UUID,
+    patch_req: ClaimPatchRequest,
+    repo: AbstractRepository = Depends(get_repository),
+):
+    """
+    Updates the text boundary and content of an extracted claim (Resolves Gap 3).
+    """
+    claim = await repo.get_claim(claim_id)
+    if not claim:
+        raise NotFoundError(resource="Claim", identifier=str(claim_id))
+
+    updated = await repo.patch_claim(
+        claim_id=claim_id,
+        claim_text=patch_req.claim_text,
+        char_span=patch_req.char_span,
+    )
+    if not updated:
+        raise NotFoundError(resource="Claim", identifier=str(claim_id))
+    return updated
+
 

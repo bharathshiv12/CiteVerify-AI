@@ -21,6 +21,8 @@ from app.api.routes import (
     documents_router,
     claims_router,
     research_router,
+    dashboard_router,
+    settings_router,
 )
 
 
@@ -59,6 +61,8 @@ def create_app() -> FastAPI:
     app.include_router(documents_router, prefix="/api")
     app.include_router(claims_router, prefix="/api")
     app.include_router(research_router, prefix="/api")
+    app.include_router(dashboard_router, prefix="/api")
+    app.include_router(settings_router, prefix="/api")
 
     return app
 
