@@ -90,7 +90,7 @@ export async function checkHealth(): Promise<{ status: string; service: string; 
 
 export async function uploadDocument(file: File): Promise<Document> {
   if (USE_MOCKS) {
-    const mock = await import("../../contracts/examples/synthetic_document.json");
+    const mock = await import("../lib/fixtures/synthetic_document.json");
     const synthetic = {
       ...(mock.default as unknown as Document),
       id: "00000000-0000-0000-0000-000000000001",
@@ -176,7 +176,7 @@ export async function getDocumentClaims(
   params: GetClaimsParams = {}
 ): Promise<ClaimListResponse> {
   if (USE_MOCKS) {
-    const mock = await import("../../contracts/examples/synthetic_claims.json");
+    const mock = await import("../lib/fixtures/synthetic_claims.json");
     let items = (mock.default as unknown as ClaimListResponse).items;
     if (params.verdict) {
       items = items.filter((c) => c.verdict === params.verdict);
@@ -215,7 +215,7 @@ export async function getDocumentClaims(
 
 export async function getDocumentReport(documentId: string): Promise<VerificationReport> {
   if (USE_MOCKS) {
-    const mock = await import("../../contracts/examples/synthetic_report.json");
+    const mock = await import("../lib/fixtures/synthetic_report.json");
     return mock.default as unknown as VerificationReport;
   }
 
@@ -233,7 +233,7 @@ export async function getDocumentReport(documentId: string): Promise<Verificatio
 
 export async function getClaimDetails(claimId: string): Promise<Claim> {
   if (USE_MOCKS) {
-    const mock = await import("../../contracts/examples/synthetic_claims.json");
+    const mock = await import("../lib/fixtures/synthetic_claims.json");
     const items = (mock.default as unknown as ClaimListResponse).items;
     const found = items.find((c) => c.id === claimId);
     if (!found) {
@@ -259,7 +259,7 @@ export async function submitClaimReview(
   review: ClaimReviewRequest
 ): Promise<Claim> {
   if (USE_MOCKS) {
-    const mock = await import("../../contracts/examples/synthetic_claims.json");
+    const mock = await import("../lib/fixtures/synthetic_claims.json");
     const items = (mock.default as unknown as ClaimListResponse).items;
     const found = items.find((c) => c.id === claimId) || items[0];
     return {
