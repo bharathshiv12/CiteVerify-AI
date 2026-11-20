@@ -122,9 +122,19 @@ def get_request_id(request: Request) -> str:
     return getattr(request.state, "request_id", str(uuid.uuid4()))
 
 
+def _attach_cors_headers(request: Request, response: JSONResponse) -> JSONResponse:
+    origin = request.headers.get("origin")
+    if origin:
+        response.headers["Access-Control-Allow-Origin"] = origin
+        response.headers["Access-Control-Allow-Credentials"] = "true"
+        response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
+        response.headers["Access-Control-Allow-Headers"] = "*"
+    return response
+
+
 async def app_exception_handler(request: Request, exc: AppException) -> JSONResponse:
     request_id = get_request_id(request)
-    return JSONResponse(
+    resp = JSONResponse(
         status_code=exc.status_code,
         content={
             "error": {
@@ -135,6 +145,7 @@ async def app_exception_handler(request: Request, exc: AppException) -> JSONResp
             }
         },
     )
+    return _attach_cors_headers(request, resp)
 
 
 async def http_exception_handler(request: Request, exc: StarletteHTTPException) -> JSONResponse:
@@ -160,7 +171,7 @@ async def http_exception_handler(request: Request, exc: StarletteHTTPException) 
             "path": request.url.path,
             "scope_path": request.scope.get("path", ""),
         }
-    return JSONResponse(
+    resp = JSONResponse(
         status_code=exc.status_code,
         content={
             "error": {
@@ -171,6 +182,7 @@ async def http_exception_handler(request: Request, exc: StarletteHTTPException) 
             }
         },
     )
+    return _attach_cors_headers(request, resp)
 
 
 async def validation_exception_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
@@ -180,7 +192,7 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
         field = ".".join(str(loc) for loc in err.get("loc", []))
         errors.append({"field": field, "message": err.get("msg", ""), "type": err.get("type", "")})
 
-    return JSONResponse(
+    resp = JSONResponse(
         status_code=status.HTTP_400_BAD_REQUEST,
         content={
             "error": {
@@ -191,19 +203,24 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
             }
         },
     )
+    return _attach_cors_headers(request, resp)
 
 
 async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
     request_id = get_request_id(request)
     logger.exception(f"[{request_id}] Unhandled internal exception: {exc}")
-    return JSONResponse(
+    resp = JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         content={
             "error": {
                 "code": "INTERNAL_SERVER_ERROR",
                 "message": "An unexpected server error occurred. Please contact support with the request ID.",
-                "details": {},
+                "details": {
+                    "error_type": type(exc).__name__,
+                    "error_message": str(exc),
+                },
                 "request_id": request_id,
             }
         },
     )
+    return _attach_cors_headers(request, resp)

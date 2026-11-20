@@ -25,6 +25,7 @@ async def health_check():
         "version": settings.VERSION,
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "supabase_configured": settings.is_supabase_configured,
+        "supabase_secret_key_configured": bool(settings.effective_supabase_secret_key),
         "ai_configured": settings.is_ai_configured,
         "storage_backend": settings.STORAGE_BACKEND,
         "repository_backend": settings.REPOSITORY_BACKEND,

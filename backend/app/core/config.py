@@ -47,6 +47,8 @@ class Settings(BaseSettings):
     SUPABASE_PUBLISHABLE_KEY: str = ""
     SUPABASE_SERVICE_ROLE_KEY: str = ""
     SUPABASE_SECRET_KEY: str = ""
+    SUPABASE_SERVICE_KEY: str = ""
+    SUPABASE_KEY: str = ""
     SUPABASE_JWT_SECRET: str = ""
 
     # Research APIs & Polite Pool
@@ -93,11 +95,19 @@ class Settings(BaseSettings):
 
     @property
     def effective_supabase_secret_key(self) -> str:
-        return self.SUPABASE_SECRET_KEY or self.SUPABASE_SERVICE_ROLE_KEY
+        return (
+            self.SUPABASE_SECRET_KEY
+            or self.SUPABASE_SERVICE_ROLE_KEY
+            or self.SUPABASE_SERVICE_KEY
+        )
 
     @property
     def effective_supabase_anon_key(self) -> str:
-        return self.SUPABASE_PUBLISHABLE_KEY or self.SUPABASE_ANON_KEY
+        return (
+            self.SUPABASE_PUBLISHABLE_KEY
+            or self.SUPABASE_ANON_KEY
+            or self.SUPABASE_KEY
+        )
 
     @property
     def is_supabase_configured(self) -> bool:

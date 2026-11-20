@@ -36,8 +36,19 @@ class AbstractFileStorage(ABC):
 
 class LocalFileStorage(AbstractFileStorage):
     def __init__(self, base_dir: Optional[str] = None):
-        self.base_dir = os.path.abspath(base_dir or settings.LOCAL_STORAGE_DIR)
-        os.makedirs(self.base_dir, exist_ok=True)
+        is_serverless = bool(
+            os.getenv("VERCEL")
+            or os.environ.get("AWS_LAMBDA_FUNCTION_NAME")
+            or not os.access(".", os.W_OK)
+        )
+        default_dir = "/tmp/citeverify_storage" if is_serverless else settings.LOCAL_STORAGE_DIR
+        target = base_dir or default_dir
+        try:
+            self.base_dir = os.path.abspath(target)
+            os.makedirs(self.base_dir, exist_ok=True)
+        except OSError:
+            self.base_dir = "/tmp/citeverify_storage"
+            os.makedirs(self.base_dir, exist_ok=True)
 
     def _resolve_safe_path(self, relative_path: str) -> str:
         # Prevent path traversal
@@ -83,7 +94,13 @@ class LocalFileStorage(AbstractFileStorage):
 class SupabaseFileStorage(AbstractFileStorage):
     def __init__(self, bucket_name: Optional[str] = None):
         self.bucket_name = bucket_name or settings.SUPABASE_STORAGE_BUCKET
-        self._fallback_local = LocalFileStorage()
+        self._fallback_local_instance = None
+
+    @property
+    def _fallback_local(self) -> LocalFileStorage:
+        if self._fallback_local_instance is None:
+            self._fallback_local_instance = LocalFileStorage()
+        return self._fallback_local_instance
 
     def _get_bucket(self):
         from supabase import create_client

@@ -17,7 +17,16 @@ class RequestIdAndLoggingMiddleware(BaseHTTPMiddleware):
         request.state.request_id = request_id
 
         start_time = time.perf_counter()
-        response = await call_next(request)
+        try:
+            response = await call_next(request)
+        except Exception as exc:
+            logger.error(
+                f"[{request_id}] Unhandled exception in {request.method} {request.url.path}: {exc}",
+                exc_info=True,
+            )
+            from app.core.errors import unhandled_exception_handler
+            response = await unhandled_exception_handler(request, exc)
+
         process_time_ms = (time.perf_counter() - start_time) * 1000.0
 
         response.headers["X-Request-ID"] = request_id
